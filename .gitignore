@@ -4,6 +4,8 @@
 *.jpeg
 *.webp
 *.gif
+# (exceto os assets do projeto)
+!assets/*.png
 
 # Cache do Python (testes locais)
 __pycache__/
