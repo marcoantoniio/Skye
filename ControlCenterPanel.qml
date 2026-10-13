@@ -505,32 +505,51 @@ PanelWindow {
             spacing: 12
 
             // ---- abas + fechar ----
-            RowLayout {
-                id: tabBar
+            // Espaçadores iguais dos dois lados das abas as deixam centralizadas
+            // de verdade; o ✕ fica sobreposto à direita, fora do fluxo.
+            Item {
                 Layout.fillWidth: true
-                spacing: 8
+                implicitHeight: tabBar.implicitHeight
 
-                PanelTab {
-                    label: I18n.tr("tabControlCenter")
-                    selected: ControlCenter.tab === 0
-                    onActivated: ControlCenter.tab = 0
+                RowLayout {
+                    id: tabBar
+                    anchors.fill: parent
+                    spacing: 8
+
+                    Item { Layout.fillWidth: true }
+
+                    PanelTab {
+                        label: I18n.tr("tabControlCenter")
+                        selected: ControlCenter.tab === 0
+                        onActivated: ControlCenter.tab = 0
+                    }
+
+                    PanelTab {
+                        label: I18n.tr("tabDashboard")
+                        selected: ControlCenter.tab === 1
+                        onActivated: ControlCenter.tab = 1
+                    }
+
+                    PanelTab {
+                        label: I18n.tr("tabClipboardNotes")
+                        selected: ControlCenter.tab === 2
+                        onActivated: ControlCenter.tab = 2
+                    }
+
+                    PanelTab {
+                        label: I18n.tr("tabOpenCode")
+                        selected: ControlCenter.tab === 3
+                        onActivated: ControlCenter.tab = 3
+                    }
+
+                    Item { Layout.fillWidth: true }
                 }
-
-                PanelTab {
-                    label: I18n.tr("tabDashboard")
-                    selected: ControlCenter.tab === 1
-                    onActivated: ControlCenter.tab = 1
-                }
-
-                PanelTab {
-                    label: I18n.tr("tabClipboardNotes")
-                    selected: ControlCenter.tab === 2
-                    onActivated: ControlCenter.tab = 2
-                }
-
-                Item { Layout.fillWidth: true }
 
                 Text {
+                    anchors {
+                        right: parent.right
+                        verticalCenter: parent.verticalCenter
+                    }
                     text: "✕"
                     color: closeArea.containsMouse ? Theme.foreground : Theme.foregroundDim
                     font.family: Theme.fontFamily
@@ -1513,6 +1532,14 @@ PanelWindow {
                 }
 
             }
+
+                // ================= PAGE 3: OPENCODE =================
+                OpenCodeTab {
+                    id: ocPage
+
+                    Layout.fillWidth: true
+                }
+
             }
 
             Rectangle {

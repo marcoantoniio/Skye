@@ -41,8 +41,8 @@ but it works on any compositor with `wlr-layer-shell` — KWin, Hyprland, niri, 
 
 ### Control Center
 
-- Tabs: **Control Center | Dashboard | Clipboard & Notes** (fixed height, no
-  "jumping" when switching tabs).
+- Tabs: **Control Center | Dashboard | Clipboard & Notes | OpenCode** (fixed
+  height, no "jumping" when switching tabs).
 - **Control Center**: Quick Settings (Network, Do Not Disturb, Night Light,
   Caffeine, Bluetooth, **Recorder** — records the screen and lights up while
   recording, **Camera** — webcam preview) + Session (Lock, Log out, Restart,
@@ -108,6 +108,7 @@ but it works on any compositor with `wlr-layer-shell` — KWin, Hyprland, niri, 
 | `gpu-screen-recorder` | all-screens recording (Recorder button; uses NVENC/GPU and system audio + microphone) |
 | `khal`, `vdirsyncer` | Proton Calendar events on the Dashboard |
 | `discord` (native, not Flatpak/Snap), `python3` | Discord Rich Presence for the Deezer track |
+| `opencode` | OpenCode tab in the Control Center (prompts with streaming responses) |
 
 ---
 
@@ -274,6 +275,26 @@ public API), the title, the album art, a progress bar and a "Listen on
 Deezer" button (buttons are only visible to other people). Pausing clears
 the presence.
 
+### OpenCode tab
+
+Prompts OpenCode from the bar, streaming the answer line by line. Requires
+the `opencode` CLI.
+
+The tab keeps a session of its own (persisted across restarts), an input
+line with history (↑/↓), a **broom** button (wipes the visible chat) and a
+**plus** button (fresh session). The commands:
+
+- `cd <dir>` (or `/cd <dir>`) — where the agent works (default: your home
+  directory). It starts a fresh session there, because OpenCode sessions
+  belong to the directory where they were created. `cd ..`, `cd -` (back to
+  the previous directory) and `~` work like in a terminal;
+- `/model <name>` — pick a model (empty resets to OpenCode's default);
+- `/new` — start a fresh session (same as the plus button).
+
+It runs with `--auto`, so the agent may read and edit files and run
+commands without asking for approval — keep that in mind when pointing it
+at a directory with important files.
+
 ---
 
 ## ⌨️ IPC
@@ -284,7 +305,7 @@ qs -c skye ipc show                          # lists everything available
 qs -c skye ipc call notifications toggle     # notifications panel
 qs -c skye ipc call notifications toggleDnd  # do not disturb
 qs -c skye ipc call controlcenter toggle     # control center
-qs -c skye ipc call controlcenter setTab 1   # 0=CC, 1=Dashboard, 2=Clipboard
+qs -c skye ipc call controlcenter setTab 1   # 0=CC, 1=Dashboard, 2=Clipboard, 3=OpenCode
 qs -c skye ipc call controlcenter toggleMixer  # app mixer (instead of Levels)
 qs -c skye ipc call workspaces switchToIndex 1
 qs -c skye ipc call brightness set 40        # brightness (DDC/CI)
@@ -296,6 +317,9 @@ qs -c skye ipc call recorder stop            # stops and saves the file
 qs -c skye ipc call music status             # current music (MPRIS)
 qs -c skye ipc call music toggle             # play/pause
 qs -c skye ipc call discord status           # Discord Rich Presence state
+qs -c skye ipc call opencode send "prompt"   # OpenCode tab: prompt (streams the answer)
+qs -c skye ipc call opencode clear           # clears the OpenCode tab chat
+qs -c skye ipc call opencode status          # OpenCode tab state
 qs -c skye ipc call audio setVolume 0.5      # output volume (shows the OSD)
 qs -c skye ipc call timer pomodoro           # pomodoro/stopwatch (no UI yet)
 qs -c skye ipc call timer status             # pomodoro/stopwatch state
@@ -352,6 +376,7 @@ Colors use Qt's `#AARRGGBB` format (the `AA` is the transparency).
 | `RecentFiles.qml`, `RecentFilesPanel.qml` | recent files panel (cyan button hub) |
 | `ProtonCalendar.qml` | Proton Calendar events (vdirsyncer + khal). See Integrations |
 | `DiscordPresence.qml`, `discord_rpc.py` | Discord Rich Presence for the Deezer track. See Integrations |
+| `OpenCode.qml`, `OpenCodeTab.qml` | OpenCode tab in the Control Center (streaming). See Integrations |
 
 ---
 
