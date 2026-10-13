@@ -4,3 +4,6 @@
 *.jpeg
 *.webp
 *.gif
+
+# Cache do Python (testes locais)
+__pycache__/

@@ -72,6 +72,11 @@ but it works on any compositor with `wlr-layer-shell` — KWin, Hyprland, niri, 
   themselves).
 - **Central theme** in `Theme.qml`: black background, warm white text
   (`#efeceb`), peach accent (`#f4be9e`).
+- **Proton Calendar** (optional): days with events get a dot under the number on
+  the Dashboard calendar; clicking a day lists the events (time, title,
+  location, description). See Integrations.
+- **Discord Rich Presence** (optional): while Deezer plays, your Discord status
+  shows the track (artists, title, album art and progress). See Integrations.
 - **Custom IPC** to control everything from the command line.
 
 ---
@@ -101,6 +106,8 @@ but it works on any compositor with `wlr-layer-shell` — KWin, Hyprland, niri, 
 | `qt6-multimedia` | camera preview (Camera button) |
 | `curl` | lyrics (lrclib) and album art |
 | `gpu-screen-recorder` | all-screens recording (Recorder button; uses NVENC/GPU and system audio + microphone) |
+| `khal`, `vdirsyncer` | Proton Calendar events on the Dashboard |
+| `discord` (native, not Flatpak/Snap), `python3` | Discord Rich Presence for the Deezer track |
 
 ---
 
@@ -175,6 +182,100 @@ Categories=Utility;
 
 ---
 
+## 🧩 Integrations (optional)
+
+### Proton Calendar
+
+Shows your Proton Calendar events on the Dashboard calendar. Proton has no
+CalDAV, so this uses a read-only sharing link:
+
+1. In the Proton Calendar web app, go to Settings → All settings → Calendars,
+   pick the calendar and create a link under **Share with anyone**:
+   **Full view** shows event details, **Limited view** shows busy times only.
+2. Install `khal` and `vdirsyncer`.
+3. Save the link in `~/.config/vdirsyncer/config` (create the file if needed):
+
+```ini
+[general]
+status_path = "~/.local/share/vdirsyncer/status/"
+
+[pair proton]
+a = "proton_local"
+b = "proton_remote"
+collections = null
+
+[storage proton_local]
+type = "filesystem"
+path = "~/.local/share/skye/proton/"
+fileext = ".ics"
+
+[storage proton_remote]
+type = "http"
+url = "YOUR_PROTON_SHARE_LINK"
+```
+
+The link is a secret — anyone with it can read that calendar — so keep the
+file private (`chmod 600`).
+
+4. Create `~/.config/khal/config`:
+
+```ini
+[calendars]
+
+[[proton]]
+path = ~/.local/share/skye/proton/
+type = calendar
+
+[locale]
+timeformat = %H:%M
+dateformat = %Y-%m-%d
+longdateformat = %Y-%m-%d
+datetimeformat = %Y-%m-%d %H:%M
+longdatetimeformat = %Y-%m-%d %H:%M
+```
+
+5. First-time setup:
+
+```bash
+mkdir -p ~/.local/share/skye/proton
+vdirsyncer discover proton
+vdirsyncer sync proton    # first sync (Skye syncs every 30 minutes after this)
+```
+
+Skye runs `vdirsyncer sync` every 30 minutes by itself — no cron needed.
+Proton can take up to 8 hours to reflect changes in the link, and the link
+can stop working after a while (generate a new one in Proton if that
+happens).
+
+### Discord Rich Presence
+
+Shows the track you are playing on Deezer in your Discord profile. Requires
+the **native** Discord client (Flatpak/Snap sandbox the IPC socket) and
+`python3`.
+
+1. Create an application at <https://discord.com/developers/applications>.
+   The name you give it is what Discord displays in "Listening to …".
+2. Copy the **Application ID** (General Information) and save it in
+   `~/.config/skye/discord_client_id.txt`:
+
+   ```bash
+   mkdir -p ~/.config/skye
+   printf '%s\n' YOUR_APPLICATION_ID > ~/.config/skye/discord_client_id.txt
+   ```
+
+   Then restart Skye (`systemctl --user restart skye.service`) to pick it up.
+
+That is all Skye needs — no Client Secret and no bot token. Never share
+those; the Application ID itself is public.
+
+While Deezer is playing you get the artists (all of them — the Deezer app
+sends only the main artist over MPRIS, so the list is completed from Deezer's
+public API), the title, the album art, a progress bar and a "Listen on
+Deezer" button (buttons are only visible to other people). Pausing clears
+the presence.
+
+---
+
 ## ⌨️ IPC
 
 ```bash
@@ -194,6 +295,7 @@ qs -c skye ipc call recorder pause           # pauses/resumes recording
 qs -c skye ipc call recorder stop            # stops and saves the file
 qs -c skye ipc call music status             # current music (MPRIS)
 qs -c skye ipc call music toggle             # play/pause
+qs -c skye ipc call discord status           # Discord Rich Presence state
 qs -c skye ipc call audio setVolume 0.5      # output volume (shows the OSD)
 qs -c skye ipc call timer pomodoro           # pomodoro/stopwatch (no UI yet)
 qs -c skye ipc call timer status             # pomodoro/stopwatch state
@@ -223,6 +325,8 @@ qs -c skye ipc call language toggle          # language: pt-BR/EN
 | Panel size | `Theme.qml` → `controlCenterPanelWidth` |
 | Camera panel screen | `Theme.qml` → `cameraScreenName` |
 | Dynamic island monitor | `Theme.qml` → `barScreenName` |
+| Discord Application ID (Rich Presence) | `~/.config/skye/discord_client_id.txt` |
+| Proton Calendar sharing link | `~/.config/vdirsyncer/config` |
 
 Colors use Qt's `#AARRGGBB` format (the `AA` is the transparency).
 
@@ -246,6 +350,8 @@ Colors use Qt's `#AARRGGBB` format (the `AA` is the transparency).
 | `Notifications.qml`, `NotificationCenter.qml`, `NotificationPopup.qml`, `NotificationPopups.qml`, `FilterTab.qml` | notifications |
 | `Tray.qml` | system tray |
 | `RecentFiles.qml`, `RecentFilesPanel.qml` | recent files panel (cyan button hub) |
+| `ProtonCalendar.qml` | Proton Calendar events (vdirsyncer + khal). See Integrations |
+| `DiscordPresence.qml`, `discord_rpc.py` | Discord Rich Presence for the Deezer track. See Integrations |
 
 ---
 
