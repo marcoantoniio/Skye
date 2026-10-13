@@ -11,7 +11,7 @@ import QtQuick.Layouts
 PopupWindow {
     id: popup
 
-    required property var modelData
+    property var modelData
     property var panelWindow: null
 
     readonly property var notification: modelData
@@ -28,7 +28,9 @@ PopupWindow {
     implicitWidth: popupWidth
     implicitHeight: card.implicitHeight
     color: "transparent"
-    visible: true
+    // Esconde zumbis (notificação destruída = null) e toasts já removidos da
+    // pilha; sem isso a caixa preta vazia fica presa na tela.
+    visible: popup.notification != null && Notifications.popups.indexOf(popup.notification) >= 0
     grabFocus: false
 
     Rectangle {
@@ -59,9 +61,11 @@ PopupWindow {
                 Layout.preferredWidth: 36
                 Layout.preferredHeight: 36
                 visible: source !== ""
-                source: popup.notification.appIcon !== ""
-                      ? Quickshell.iconPath(popup.notification.appIcon, true)
-                      : popup.notification.image
+                source: popup.notification
+                        ? (popup.notification.appIcon !== ""
+                           ? Quickshell.iconPath(popup.notification.appIcon, true)
+                           : popup.notification.image)
+                        : ""
                 sourceSize: Qt.size(36, 36)
                 smooth: true
             }
@@ -72,7 +76,7 @@ PopupWindow {
 
                 Text {
                     Layout.fillWidth: true
-                    text: popup.notification.appName
+                    text: popup.notification ? popup.notification.appName : ""
                     color: Theme.foregroundDim
                     font.family: Theme.fontFamily
                     font.pixelSize: 11
@@ -81,7 +85,7 @@ PopupWindow {
 
                 Text {
                     Layout.fillWidth: true
-                    text: popup.notification.summary
+                    text: popup.notification ? popup.notification.summary : ""
                     color: Theme.foreground
                     font.family: Theme.fontFamily
                     font.pixelSize: 13
@@ -91,8 +95,8 @@ PopupWindow {
 
                 Text {
                     Layout.fillWidth: true
-                    visible: popup.notification.body !== ""
-                    text: popup.notification.body
+                    visible: popup.notification ? popup.notification.body !== "" : false
+                    text: popup.notification ? popup.notification.body : ""
                     textFormat: Text.PlainText
                     color: Theme.foregroundDim
                     font.family: Theme.fontFamily
@@ -104,11 +108,11 @@ PopupWindow {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    visible: popup.notification.actions.length > 0
+                    visible: popup.notification ? popup.notification.actions.length > 0 : false
                     spacing: 6
 
                     Repeater {
-                        model: popup.notification.actions
+                        model: popup.notification ? popup.notification.actions : []
 
                         delegate: Rectangle {
                             required property var modelData
@@ -145,9 +149,11 @@ PopupWindow {
 
     Timer {
         running: true
-        interval: popup.notification.expireTimeout > 0
+        // expireTimeout vem do remetente; -1/0 = sem preferência -> 6s.
+        interval: popup.notification && popup.notification.expireTimeout > 0
                   ? popup.notification.expireTimeout * 1000
                   : 6000
+        // Chama sempre (mesmo com notificação nula) para limpar zumbis da pilha.
         onTriggered: Notifications.closePopup(popup.notification)
     }
 }

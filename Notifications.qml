@@ -95,7 +95,9 @@ Singleton {
     }
 
     function closePopup(notification) {
-        popups = popups.filter(n => n !== notification);
+        // O filtro também remove zumbis (notificação já destruída = null):
+        // sem isso o toast fica preso na tela renderizando vazio.
+        popups = popups.filter(n => n !== notification && n != null);
     }
 
     function dismiss(notification) {
@@ -103,7 +105,9 @@ Singleton {
     }
 
     function clearAll() {
-        const list = server.trackedNotifications.values;
+        // Cópia: apagar durante o loop encolhe trackedNotifications e pulava
+        // itens (a lista era percorrida enquanto era modificada).
+        const list = server.trackedNotifications.values.slice();
         for (let i = 0; i < list.length; ++i)
             list[i].tracked = false;
     }
@@ -118,6 +122,11 @@ Singleton {
 
         onNotification: (notification) => {
             notification.tracked = true;
+
+            // Notificações de conexão do Proton VPN (extensão no Zen) não
+            // viram toast; continuam no histórico do painel.
+            if (notification.summary === "Proton VPN")
+                return;
 
             // Não perturbe: mantém no histórico, mas não mostra o toast.
             // Também não repopula toasts ao recarregar a config (hot reload).
