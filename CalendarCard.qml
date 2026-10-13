@@ -1,5 +1,6 @@
 // Card de calendário do Dashboard: semana atual (iniciais + dia de hoje em
 // pílula clara), mini-mês completo abaixo e o nº da semana no rodapé.
+// Dias com eventos do Proton têm uma bolinha; embaixo, os eventos do dia selecionado (hoje por padrão).
 
 import QtQuick
 import QtQuick.Layouts
@@ -12,6 +13,19 @@ Rectangle {
     color: Theme.surfaceHover
 
     property int tick: 0
+    property string pickedKey: ""
+
+    readonly property string selectedKey: {
+        root.tick;
+        return root.pickedKey !== "" ? root.pickedKey : ProtonCalendar.dayKey(new Date());
+    }
+
+    readonly property var selectedEvents: ProtonCalendar.eventsOn(root.selectedKey)
+
+    readonly property string selectedLabel: {
+        const p = root.selectedKey.split("-");
+        return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).toLocaleString(I18n.dateLocale, "ddd d MMM").replace(/\./g, "");
+    }
 
     Timer {
         interval: 60000
@@ -60,11 +74,13 @@ Rectangle {
         const daysInMonth = new Date(y, m + 1, 0).getDate();
         const cells = [];
         for (let i = 0; i < startDow; ++i)
-            cells.push({ num: 0, today: false });
-        for (let d = 1; d <= daysInMonth; ++d)
-            cells.push({ num: d, today: d === now.getDate() });
+            cells.push({ num: 0, today: false, hasEvents: false });
+        for (let d = 1; d <= daysInMonth; ++d) {
+            const key = ProtonCalendar.dayKey(new Date(y, m, d));
+            cells.push({ num: d, key: key, today: d === now.getDate(), hasEvents: ProtonCalendar.eventsOn(key).length > 0 });
+        }
         while (cells.length % 7 !== 0)
-            cells.push({ num: 0, today: false });
+            cells.push({ num: 0, today: false, hasEvents: false });
         return { name: root.monthNames[m] + " " + y, cells: cells };
     }
 
@@ -150,31 +166,122 @@ Rectangle {
                     required property var modelData
 
                     Layout.fillWidth: true
-                    implicitHeight: 16
+                    implicitHeight: 18
 
                     Rectangle {
                         anchors.centerIn: parent
-                        width: 16
-                        height: 16
-                        radius: 8
+                        width: 18
+                        height: 24
+                        radius: 9
                         visible: modelData.num > 0
                         color: modelData.today ? "#efeceb" : "transparent"
 
                         Text {
                             anchors.centerIn: parent
+                            anchors.verticalCenterOffset: modelData.hasEvents ? -3 : 0
                             visible: modelData.num > 0
                             text: modelData.num
                             color: modelData.today ? "#111111" : Theme.foregroundDim
                             font.family: Theme.fontFamily
-                            font.pixelSize: 9
+                            font.pixelSize: 11
                             font.bold: modelData.today
                         }
+                    }
+
+                    Rectangle {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 2
+                        width: 3
+                        height: 3
+                        radius: 1.5
+                        visible: modelData.hasEvents
+                        color: modelData.today ? "#111111" : Theme.accent
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: modelData.num > 0
+                        onClicked: root.pickedKey = modelData.key
                     }
                 }
             }
         }
 
-        Item { Layout.fillHeight: true }
+        Text {
+            Layout.fillWidth: true
+            text: root.selectedLabel
+            color: Theme.foreground
+            font.family: Theme.fontFamily
+            font.pixelSize: 10
+            font.bold: true
+            elide: Text.ElideRight
+        }
+
+        Text {
+            visible: root.selectedEvents.length === 0
+            Layout.fillWidth: true
+            text: I18n.tr("nothingScheduled")
+            color: Theme.foregroundDim
+            font.family: Theme.fontFamily
+            font.pixelSize: 9
+            elide: Text.ElideRight
+        }
+
+        ListView {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            spacing: 6
+            model: root.selectedEvents
+
+            delegate: Column {
+                required property var modelData
+
+                width: ListView.view.width
+                spacing: 1
+
+                Text {
+                    width: parent.width
+                    text: modelData.allDay ? I18n.tr("allDay") : modelData.start + "–" + modelData.end
+                    color: Theme.accent
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 9
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    width: parent.width
+                    text: modelData.title
+                    color: Theme.foreground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 10
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    visible: modelData.location !== ""
+                    width: parent.width
+                    text: modelData.location
+                    color: Theme.foregroundDim
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 9
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    visible: modelData.description !== ""
+                    width: parent.width
+                    text: modelData.description
+                    color: Theme.foregroundDim
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 9
+                    wrapMode: Text.Wrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                }
+            }
+        }
 
         Text {
             Layout.fillWidth: true
