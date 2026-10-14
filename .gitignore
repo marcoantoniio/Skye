@@ -5,7 +5,7 @@
 *.webp
 *.gif
 # (exceto os assets do projeto)
-!assets/*.png
+!assets/*
 
 # Cache do Python (testes locais)
 __pycache__/
