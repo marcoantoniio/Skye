@@ -117,7 +117,7 @@ Rectangle {
                         width: 18
                         height: 38
                         radius: 9
-                        color: modelData.today ? "#efeceb" : "transparent"
+                        color: modelData.today ? Theme.foreground : "transparent"
 
                         Column {
                             anchors.centerIn: parent
@@ -126,7 +126,7 @@ Rectangle {
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 text: modelData.initial
-                                color: modelData.today ? "#111111" : Theme.foregroundDim
+                                color: modelData.today ? Theme.foregroundInk : Theme.foregroundDim
                                 font.family: Theme.fontFamily
                                 font.pixelSize: 8
                             }
@@ -134,7 +134,7 @@ Rectangle {
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 text: modelData.num
-                                color: modelData.today ? "#111111" : Theme.foreground
+                                color: modelData.today ? Theme.foregroundInk : Theme.foreground
                                 font.family: Theme.fontFamily
                                 font.pixelSize: 11
                                 font.bold: modelData.today
@@ -174,7 +174,7 @@ Rectangle {
                         height: 24
                         radius: 9
                         visible: modelData.num > 0
-                        color: modelData.today ? "#efeceb" : "transparent"
+                        color: modelData.today ? Theme.foreground : "transparent"
 
                         Text {
                             anchors.centerIn: parent
@@ -196,7 +196,7 @@ Rectangle {
                         height: 3
                         radius: 1.5
                         visible: modelData.hasEvents
-                        color: modelData.today ? "#111111" : Theme.accent
+                        color: modelData.today ? Theme.foregroundInk : Theme.accent
                     }
 
                     MouseArea {

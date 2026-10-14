@@ -64,7 +64,7 @@ Rectangle {
                     Layout.fillWidth: true
                     implicitHeight: 4
                     radius: 2
-                    color: "#2a2a2a"
+                    color: Theme.surfaceHover
                     visible: modelData.progress >= 0
 
                     Rectangle {

@@ -25,6 +25,10 @@ Singleton {
     readonly property color urgent: "#e8836f"
     readonly property color recording: "#ff4b4b"
     readonly property color border: "#332f2c"
+    // Linha de topo das molduras (bem escura)
+    readonly property color edgeLine: "#000000"
+    // Cor de conteúdo sobre `foreground` (ex.: pílula do dia de hoje)
+    readonly property color foregroundInk: "#111111"
 
     // Métricas
     readonly property int barHeight: 40
@@ -35,8 +39,10 @@ Singleton {
     readonly property int radius: 14
 
     // Fontes (instaladas no sistema)
-    readonly property string fontFamily: "Noto Sans"
+    readonly property string fontFamily: "Roboto"
     readonly property string iconFont: "JetBrainsMono Nerd Font"
+    // Fonte do nome da música (ilha e painel), fora do tema geral
+    readonly property string musicFontFamily: "Noto Sans"
 
     // Largura da ilha parada no formato quadrado (o relógio fica centralizado
     // nela; fixa, não varia com o texto do relógio) — 175 + 3px de cada lado

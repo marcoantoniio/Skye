@@ -36,7 +36,7 @@ Item {
                     width: parent.width
                     height: parent.width
                     radius: width / 2
-                    color: modelData.active ? "#efeceb" : "#948d86"
+                    color: modelData.active ? Theme.foreground : Theme.foregroundDim
                     opacity: modelData.active ? 1 : (modelData.occupied ? 0.65 : 0.4)
 
                     Behavior on opacity {

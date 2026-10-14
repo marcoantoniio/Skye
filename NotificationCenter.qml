@@ -214,7 +214,7 @@ PanelWindow {
                 rightMargin: 1
             }
             height: 1
-            color: "#000000"
+            color: Theme.edgeLine
         }
 
         ColumnLayout {

@@ -482,7 +482,7 @@ PanelWindow {
                 rightMargin: 1
             }
             height: 1
-            color: "#000000"
+            color: Theme.edgeLine
         }
 
         ColumnLayout {
@@ -1178,7 +1178,7 @@ PanelWindow {
                             width: ListView.view.width
                             height: 28
                             radius: 8
-                            color: itemArea.containsMouse ? Theme.surfaceHover : "#1f1f1f"
+                            color: itemArea.containsMouse ? Theme.surfaceHover : Theme.card
 
                             Text {
                                 anchors {

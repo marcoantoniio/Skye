@@ -41,7 +41,7 @@ Item {
         radius: 7
         x: root.clamp01(root.value) * (root.width - width)
         anchors.verticalCenter: parent.verticalCenter
-        color: "#ffffff"
+        color: Theme.foreground
         border.width: 2
         border.color: root.muted ? Theme.foregroundDim : root.accent
 

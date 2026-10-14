@@ -343,7 +343,7 @@ PanelWindow {
                 rightMargin: 1
             }
             height: 1
-            color: "#000000"
+            color: Theme.edgeLine
         }
 
         ColumnLayout {
@@ -447,7 +447,7 @@ PanelWindow {
                         Layout.fillWidth: true
                         text: Music.title !== "" ? Music.title : "—"
                         color: Theme.foreground
-                        font.family: Theme.fontFamily
+                        font.family: Theme.musicFontFamily
                         font.pixelSize: 16
                         font.bold: true
                         elide: Text.ElideRight

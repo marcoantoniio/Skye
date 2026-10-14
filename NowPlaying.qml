@@ -85,7 +85,7 @@ Row {
         width: Math.min(implicitWidth, 150)
         text: Music.title
         color: Theme.foreground
-        font.family: Theme.fontFamily
+        font.family: Theme.musicFontFamily
         font.pixelSize: 12
         font.weight: Font.Medium
         elide: Text.ElideRight
