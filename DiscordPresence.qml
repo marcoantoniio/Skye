@@ -3,7 +3,10 @@ pragma Singleton
 // Rich Presence do Discord com a faixa do Deezer. Título, artista, álbum, capa
 // e link vêm do MPRIS (Music.qml e player.metadata). O discord_rpc.py mantém a
 // conexão com o Discord. Só mandamos atualização quando a faixa ou o play/pause
-// mudam. Timestamps em segundos.
+// mudam. Timestamps em segundos. Na linha de cima, o crédito "Made by Cormano"
+// acompanha o nome, com um coração roxo no meio; o ícone do app (coração
+// branco) é configurado no Portal do Discord. Sobre a capa vai um selo animado
+// (equalizador em webp animado de 120 quadros, assets/deezer-eq.webp).
 // Setup: crie um app no Discord Developer Portal e salve o Application ID em
 // ~/.config/skye/discord_client_id.txt (veja o README).
 
@@ -102,6 +105,7 @@ Singleton {
     IpcHandler {
         target: "discord"
 
+        function refresh(): void { root.lastKey = null; debounce.restart(); }
         function status(): string {
             return "rodando=" + rpc.running + " pid=" + rpc.processId
                  + " deezer=" + root.deezerPlaying + " cliente=" + (root.clientId || "(nao definido)");

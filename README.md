@@ -271,9 +271,9 @@ those; the Application ID itself is public.
 
 While Deezer is playing you get the artists (all of them — the Deezer app
 sends only the main artist over MPRIS, so the list is completed from Deezer's
-public API), the title, the album art, a progress bar and a "Listen on
-Deezer" button (buttons are only visible to other people). Pausing clears
-the presence.
+public API), the title, the album art (with an animated equalizer badge), a
+progress bar and a "Listen on Deezer" button (buttons are only visible to
+other people). Pausing clears the presence.
 
 ### OpenCode tab
 
