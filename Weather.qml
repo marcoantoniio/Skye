@@ -1,7 +1,6 @@
 pragma Singleton
 
 // Clima atual via Open-Meteo (coordenadas fixas), atualizado a cada 10 min.
-// Alerta de chuva: toast quando a chance passar do limite nas proximas horas.
 // IPC: qs -c skye ipc call weather refresh | status
 
 import Quickshell
@@ -16,6 +15,8 @@ Singleton {
     property int high: 0
     property int low: 0
     property int rainChance: 0
+    property int feelsC: 0
+    property int humidity: 0
     property int descCode: 0 // codigo WMO
     readonly property string desc: descFor(descCode)
     property string icon: "\u{F0599}" // nf-md-weather-sunny
@@ -27,17 +28,10 @@ Singleton {
     readonly property var coords: location.split(",")
     readonly property string apiUrl: "https://api.open-meteo.com/v1/forecast"
         + "?latitude=" + coords[0].trim() + "&longitude=" + coords[1].trim()
-        + "&current=temperature_2m,weather_code"
+        + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code"
         + "&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,precipitation_probability,wind_speed_10m,wind_direction_10m"
         + "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max"
         + "&timezone=auto&forecast_days=2"
-
-    // Alerta de chuva: primeira hora futura (ate 8h) com chance >= 60%.
-    // Um aviso por evento, com espera minima de 3h entre avisos.
-    readonly property int rainAlertThreshold: 60
-    readonly property int rainAlertWindow: 8
-    property int rainAlertHour: -1
-    property double rainAlertAt: 0
 
     function refresh() {
         if (!fetch.running)
@@ -87,34 +81,6 @@ Singleton {
         return dirs[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16];
     }
 
-    function checkRainAlert(times, probs) {
-        const now = Date.now();
-        let target = -1;
-        let chance = 0;
-        for (let i = 0; i < times.length; ++i) {
-            const t = new Date(times[i]).getTime();
-            if (t <= now)
-                continue;
-            if (t > now + root.rainAlertWindow * 3600000)
-                break;
-            if (Number(probs[i]) >= root.rainAlertThreshold) {
-                target = new Date(times[i]).getHours();
-                chance = Number(probs[i]);
-                break;
-            }
-        }
-        if (target < 0) {
-            root.rainAlertHour = -1;
-            return;
-        }
-        if (target === root.rainAlertHour || now - root.rainAlertAt < 3 * 3600000)
-            return;
-        root.rainAlertHour = target;
-        root.rainAlertAt = now;
-        Quickshell.execDetached(["notify-send", "-a", "Clima",
-            I18n.tr("rainAlertTitle"), I18n.tr("rainAlertBody", [target, chance])]);
-    }
-
     Process {
         id: fetch
 
@@ -125,18 +91,20 @@ Singleton {
                 try {
                     const d = JSON.parse(text);
                     root.tempC = Math.round(d.current.temperature_2m);
+                    root.feelsC = Math.round(d.current.apparent_temperature);
+                    root.humidity = Math.round(d.current.relative_humidity_2m);
                     root.descCode = Number(d.current.weather_code);
                     root.icon = root.iconFor(root.descCode);
                     root.high = Math.round(d.daily.temperature_2m_max[0]);
                     root.low = Math.round(d.daily.temperature_2m_min[0]);
                     root.rainChance = Math.round(d.daily.precipitation_probability_max[0] || 0);
 
-                    // proximas 2 horas (a partir da hora atual)
+                    // proximas 3 horas (a partir da hora atual)
                     const now = new Date();
                     const hourStart = new Date(now.getFullYear(), now.getMonth(),
                                                now.getDate(), now.getHours()).getTime();
                     const list = [];
-                    for (let i = 0; i < d.hourly.time.length && list.length < 2; ++i) {
+                    for (let i = 0; i < d.hourly.time.length && list.length < 3; ++i) {
                         const t = new Date(d.hourly.time[i]);
                         if (t.getTime() < hourStart)
                             continue;
@@ -153,7 +121,6 @@ Singleton {
                     }
                     root.hourly = list;
                     root.available = true;
-                    root.checkRainAlert(d.hourly.time, d.hourly.precipitation_probability);
                 } catch (e) {
                     console.warn("[skye] weather: falha ao ler", e);
                 }
@@ -176,8 +143,8 @@ Singleton {
         function refresh(): void { root.refresh(); }
         function status(): string {
             return "disponivel=" + root.available + " temp=" + root.tempC + "C"
-                 + " chuva=" + root.rainChance + "%"
-                 + (root.rainAlertHour >= 0 ? " alerta=~" + root.rainAlertHour + "h" : "");
+                 + " sens=" + root.feelsC + "C umid=" + root.humidity + "%"
+                 + " chuva=" + root.rainChance + "%";
         }
     }
 }

@@ -22,6 +22,11 @@ Singleton {
     readonly property color accentCool: "#40d8d8"
     readonly property color accentGreen: "#a6e3a1"
     readonly property color accentPurple: "#cba6f7"
+    // Tom de pele do bonequinho do clima (mais escuro que o acento para as
+    // roupas em pêssego não sumirem)
+    readonly property color skin: "#c98d5f"
+    // Calça do bonequinho (marrom escuro, visível sobre o fundo do card)
+    readonly property color pants: "#544a42"
     readonly property color urgent: "#e8836f"
     readonly property color recording: "#ff4b4b"
     readonly property color border: "#332f2c"

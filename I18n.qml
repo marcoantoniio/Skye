@@ -120,9 +120,6 @@ Singleton {
         "wSnow": "Neve",
         "wFreezingRain": "Chuva congelante",
         "wRain": "Chuva",
-        // alerta de chuva
-        "rainAlertTitle": "Chuva chegando",
-        "rainAlertBody": "~{0}h · {1}% de chance",
         // música
         "lyrics": "Letras",
         "notFound": "não encontrada",
@@ -228,9 +225,6 @@ Singleton {
         "wSnow": "Snow",
         "wFreezingRain": "Freezing rain",
         "wRain": "Rain",
-        // rain alert
-        "rainAlertTitle": "Rain incoming",
-        "rainAlertBody": "~{0}h · {1}% chance",
         // música
         "lyrics": "Lyrics",
         "notFound": "not found",
