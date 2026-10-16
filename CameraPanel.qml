@@ -239,7 +239,12 @@ PanelWindow {
         // está na tela (a ilha só volta a arredondar quando ela recolhe).
         topLeftRadius: 0
         topRightRadius: 0
-        color: Theme.surface
+                gradient: Gradient {
+            orientation: Gradient.Vertical
+            GradientStop { position: 0.0; color: Theme.backgroundTop }
+            GradientStop { position: 0.6; color: Theme.backgroundTop }
+            GradientStop { position: 1.0; color: Theme.backgroundBottom }
+        }
         border.width: 1
         border.color: Theme.border
 

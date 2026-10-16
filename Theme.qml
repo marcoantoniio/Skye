@@ -11,6 +11,11 @@ Singleton {
     // Formato Qt: #AARRGGBB — o AA controla a transparência (eb ≈ 92%)
     readonly property color background: "#eb000000"
     readonly property color surface: "#f0000000"
+    // Fundo em degradê vertical: 100% opaco nos 60% de cima (a ilha e a maior
+    // parte do painel), clareando nos 40% de baixo até ~70% de opacidade
+    // (30% de transparência) na base.
+    readonly property color backgroundTop: "#ff000000"
+    readonly property color backgroundBottom: "#b3000000"
     readonly property color card: "#141414"
     readonly property color surfaceHover: "#2b2825"
     readonly property color foreground: "#efeceb"

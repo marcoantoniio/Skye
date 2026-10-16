@@ -141,7 +141,8 @@ PanelWindow {
         y: Island.square ? -1 : Theme.barMargin
         height: Theme.barHeight
         radius: Island.square ? 0 : Theme.barRadius
-        color: Theme.background
+        // A ilha é 100% opaca (0% de transparência)
+        color: Theme.backgroundTop
         border.width: 1
         border.color: Theme.border
         clip: true
