@@ -6,7 +6,8 @@ pragma Singleton
 // mudam. Timestamps em segundos. Na linha de cima, o crédito "Made by Cormano"
 // acompanha o nome, com um coração roxo no meio; o ícone do app (coração
 // branco) é configurado no Portal do Discord. Sobre a capa vai um selo animado
-// (equalizador em webp animado de 120 quadros, assets/deezer-eq.webp).
+// (equalizador em webp animado de 120 quadros, assets/deezer-eq.webp), sem
+// texto no hover.
 // Setup: crie um app no Discord Developer Portal e salve o Application ID em
 // ~/.config/skye/discord_client_id.txt (veja o README).
 

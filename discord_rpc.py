@@ -62,12 +62,11 @@ def activity_for(state):
         assets["large_image"] = state["artUrl"]
     if text(state["album"]):
         assets["large_text"] = text(state["album"])
-    # Selo animado (equalizador) no canto da capa, com o crédito no hover.
+    # Selo animado (equalizador) no canto da capa.
     # Webp animado na origem: o proxy do Discord decima GIFs ao converter para
     # webp (o cliente sempre pede format=webp), mas repassa webp inteiro.
     # URL fixada no commit: o CDN do raw nao invalida cache por query string.
     assets["small_image"] = "https://raw.githubusercontent.com/marcoantoniio/Skye/e701c3d/assets/deezer-eq.webp"
-    assets["small_text"] = "Made by Cormano"
     buttons = []
     if state["url"].startswith("https://"):
         buttons.append({"label": "Ouvir no Deezer", "url": state["url"]})
