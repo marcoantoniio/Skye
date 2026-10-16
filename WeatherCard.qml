@@ -45,6 +45,7 @@ Rectangle {
 
             Text {
                 Layout.alignment: Qt.AlignVCenter
+                Layout.rightMargin: 8
                 text: Weather.available ? Weather.tempC + "°C" : "—"
                 color: Theme.foreground
                 font.family: Theme.fontFamily
