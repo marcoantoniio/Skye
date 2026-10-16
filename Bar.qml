@@ -49,17 +49,7 @@ PanelWindow {
         onTriggered: bar.expanded = false
     }
 
-    // Painel de música: abre no hover (com atraso) quando há música tocando
-    Timer {
-        id: musicOpenTimer
-        interval: 350
-        onTriggered: {
-            if (Music.playing && !ControlCenter.open && !Notifications.centerOpen
-                    && !Webcam.open && !RecentFiles.open)
-                Music.panelOpen = true;
-        }
-    }
-
+    // Painel de música: fecha com atraso quando o mouse sai da ilha/painel
     Timer {
         id: musicCloseTimer
         interval: 350
@@ -250,10 +240,9 @@ PanelWindow {
                     recentCloseTimer.stop();
                     notificationsCloseTimer.stop();
                     if (Music.playing && !ControlCenter.open && !Notifications.centerOpen && !Webcam.open)
-                        musicOpenTimer.start();
+                        Music.panelOpen = true; // abre junto com a expansão: um movimento só
                 } else {
                     collapseTimer.start();
-                    musicOpenTimer.stop();
                     musicCloseTimer.start();
                     controlCenterCloseTimer.start();
                     recentCloseTimer.start();
