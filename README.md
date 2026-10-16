@@ -99,7 +99,7 @@ but it works on any compositor with `wlr-layer-shell` — KWin, Hyprland, niri, 
 | `umbriel` | workspaces via the compositor IPC (otherwise uses KWin) |
 | `pipewire` / `wireplumber` | volume and microphone sliders |
 | `ddcutil` | external monitor brightness (DDC/CI) |
-| `nvidia-smi` / `lm_sensors` | GPU and temperature on the Dashboard |
+| `nvidia-smi` (NVIDIA), sysfs `amdgpu` (AMD) ou `intel_gpu_top` (Intel) / `lm_sensors` | GPU and temperature on the Dashboard |
 | `kitty` | terminal button in the footer |
 | `wl-clipboard` | clipboard history (wl-paste/wl-copy) |
 | `gammastep` | Night Light button |

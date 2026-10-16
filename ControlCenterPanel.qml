@@ -108,13 +108,16 @@ PanelWindow {
             }
         }
 
-        // GPU (nvidia-smi: utilização, VRAM usada, VRAM total em MiB)
+        // GPU (NVIDIA via nvidia-smi, AMD/amdgpu via sysfs ou Intel via
+        // intel_gpu_top: utilização, VRAM usada, VRAM total em MiB)
         if (data.gpu !== undefined && /^\d/.test(data.gpu.trim())) {
             const f = data.gpu.split(",").map(s => Number(s.trim()));
             if (f.length >= 3 && isFinite(f[0])) {
-                gpuText = f[0] + "%";
+                gpuText = Math.round(f[0]) + "%";
                 gpuProgress = f[0] / 100;
-                gpuLabel = "GPU · " + (f[1] / 1024).toFixed(1) + "/" + (f[2] / 1024).toFixed(0) + " GB";
+                gpuLabel = (f[1] > 0 && f[2] > 0)
+                    ? "GPU · " + (f[1] / 1024).toFixed(1) + "/" + (f[2] / 1024).toFixed(0) + " GB"
+                    : "GPU";
             }
         }
 
@@ -392,7 +395,19 @@ PanelWindow {
         command: ["sh", "-c",
             "echo \"cpu $(head -1 /proc/stat)\"; " +
             "echo \"mem $(free -b | sed -n 2p)\"; " +
-            "echo \"gpu $(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | head -1)\"; " +
+            // GPU: NVIDIA via nvidia-smi; AMD (amdgpu) via sysfs; Intel via
+            // intel_gpu_top (intel-gpu-tools), se instalado
+            "g=$(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | head -1); " +
+            "if [ -z \"$g\" ]; then for d in /sys/class/drm/card*/device; do " +
+            "if [ -r \"$d/gpu_busy_percent\" ]; then " +
+            "u=$(cat \"$d/gpu_busy_percent\" 2>/dev/null); " +
+            "vu=$(cat \"$d/mem_info_vram_used\" 2>/dev/null); " +
+            "vt=$(cat \"$d/mem_info_vram_total\" 2>/dev/null); " +
+            "g=\"$u, $(( ${vu:-0} / 1048576 )), $(( ${vt:-0} / 1048576 ))\"; break; fi; done; fi; " +
+            "if [ -z \"$g\" ] && command -v intel_gpu_top >/dev/null 2>&1; then " +
+            "u=$(timeout 1.2 intel_gpu_top -J -s 400 2>/dev/null | tail -1 | grep -oE '\"Render/3D[^\"]*\": \\{\"busy\": [0-9.]+' | head -1 | grep -oE '[0-9.]+$'); " +
+            "if [ -n \"$u\" ]; then g=\"$u, 0, 0\"; fi; fi; " +
+            "echo \"gpu $g\"; " +
             "echo \"temp $(sensors 2>/dev/null | grep -m1 -E 'Package id 0|Tctl|Tdie')\"; " +
             "echo \"disks $(df -B1 -x tmpfs -x devtmpfs -x efivarfs -x overlay -x squashfs -x fuse.portal --output=source,target,size,used 2>/dev/null | tail -n +2 | awk '!seen[$1]++ { print $2, $3, $4 }' | sort -k2 -n -r | head -3 | paste -sd'|' -)\"; " +
             "echo \"uptime $(cat /proc/uptime)\""
