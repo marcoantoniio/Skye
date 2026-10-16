@@ -240,8 +240,6 @@ PanelWindow {
                     controlCenterCloseTimer.stop();
                     recentCloseTimer.stop();
                     notificationsCloseTimer.stop();
-                    if (Music.playing && !ControlCenter.open && !Notifications.centerOpen && !Webcam.open)
-                        Music.panelOpen = true; // abre junto com a expansão: um movimento só
                 } else {
                     collapseTimer.start();
                     musicCloseTimer.start();
@@ -303,6 +301,58 @@ PanelWindow {
             id: nowPlaying
             anchors.centerIn: parent
             visible: pill.centerMode === "music"
+        }
+
+        // Zona de descanso sobre a música: o painel só abre se o mouse PARAR
+        // aqui ~200ms. Passar reto por cima (ex.: indo clicar nas bolinhas de
+        // workspace) não abre; as laterais também não abrem nada.
+        Item {
+            id: musicHoverZone
+
+            anchors.centerIn: parent
+            width: nowPlaying.width
+            height: nowPlaying.height
+            // Só reage com a ilha já totalmente expandida: durante a animação
+            // tudo está deslizando e cliques nas bolinhas/áreas vizinhas
+            // acabavam caindo aqui (o painel dava uma aparecida).
+            enabled: pill.centerMode === "music" && pill.reveal >= 1
+
+            MouseArea {
+                id: dwellArea
+
+                anchors.fill: parent
+                hoverEnabled: true
+                acceptedButtons: Qt.LeftButton
+
+                // Clicar na música volta pro modo de música: fecha o painel
+                // que estiver aberto (ex.: Control Center) e abre o de música.
+                onClicked: {
+                    if (Music.playing && !Webcam.open) {
+                        ControlCenter.close();
+                        Notifications.centerOpen = false;
+                        RecentFiles.close();
+                        Music.panelOpen = true;
+                    }
+                }
+
+                Timer {
+                    id: musicDwell
+                    interval: 200
+                    onTriggered: {
+                        if (dwellArea.containsMouse && Music.playing && !ControlCenter.open
+                                && !Notifications.centerOpen && !Webcam.open)
+                            Music.panelOpen = true;
+                    }
+                }
+
+                onContainsMouseChanged: {
+                    if (containsMouse)
+                        musicDwell.restart();
+                    else
+                        musicDwell.stop();
+                }
+                onPositionChanged: musicDwell.restart()
+            }
         }
 
         TimerNotice {

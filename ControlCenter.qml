@@ -51,6 +51,7 @@ Singleton {
             Notifications.centerOpen = false;
             Webcam.open = false;
             RecentFiles.open = false;
+            Music.panelOpen = false;
         } else {
             mixerOpen = false;
         }
@@ -66,7 +67,7 @@ Singleton {
         target: "controlcenter"
 
         function toggle(): void { root.toggle(); }
-        function open(): void { Webcam.open = false; RecentFiles.open = false; root.open = true; }
+        function open(): void { Webcam.open = false; RecentFiles.open = false; Notifications.centerOpen = false; Music.panelOpen = false; root.open = true; }
         function close(): void { root.close(); }
         function setTab(n: int): void { root.tab = n; }
         function getTab(): int { return root.tab; }

@@ -77,12 +77,14 @@ Singleton {
     function openAll() {
         ControlCenter.open = false;
         RecentFiles.open = false;
+        Music.panelOpen = false;
         activeCategory = "";
         centerOpen = true;
     }
 
     function openCategory(name) {
         RecentFiles.open = false;
+        Music.panelOpen = false;
         activeCategory = name;
         centerOpen = true;
     }
