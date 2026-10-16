@@ -11,6 +11,7 @@ Item {
     property color accent: Theme.accent
 
     signal moved(real value)
+    signal released()
 
     implicitHeight: 22
 
@@ -65,5 +66,6 @@ Item {
             if (pressed)
                 emitAt(mouse.x);
         }
+        onReleased: root.released()
     }
 }

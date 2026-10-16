@@ -17,6 +17,11 @@ PanelWindow {
 
     readonly property int panelWidth: Theme.musicPanelWidth
 
+    // Seek do slider de progresso: aplicado só ao soltar (durante o arrasto
+    // fica só no preview local; a enxurrada de seeks travava o Deezer)
+    property bool seeking: false
+    property real seekValue: 0
+
     readonly property var sinks: {
         const out = [];
         const nodes = Pipewire.nodes.values;
@@ -492,9 +497,16 @@ PanelWindow {
 
                 LevelSlider {
                     Layout.fillWidth: true
-                    value: Music.progress
+                    value: panel.seeking ? panel.seekValue : Music.progress
                     accent: panel.albumColor
-                    onMoved: (v) => Music.seekTo(v)
+                    onMoved: (v) => {
+                        panel.seeking = true;
+                        panel.seekValue = v;
+                    }
+                    onReleased: {
+                        Music.seekTo(panel.seekValue);
+                        panel.seeking = false;
+                    }
                 }
 
                 Text {

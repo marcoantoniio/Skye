@@ -43,33 +43,65 @@ Singleton {
     readonly property bool canPrev: player !== null && player.canGoPrevious
     readonly property bool canToggle: player !== null && player.canTogglePlaying
 
-    // ---------- posição (sincronizada com o player) ----------
+    // ---------- posição (real, via D-Bus; extrapolada entre as leituras) ----------
+    // O Quickshell extrapola a posição de um cache que só ressincroniza em
+    // troca de faixa: no repeat (a faixa reinicia) e em seeks externos o
+    // tempo só aumentava. Aqui lemos a posição real periodicamente e
+    // extrapolamos localmente entre as leituras, corrigindo qualquer deriva.
     property real livePosition: 0
+    property double realBase: 0 // última posição real lida (s)
+    property double realBaseAt: 0 // quando (ms)
 
     readonly property real progress: length > 0 ? Math.max(0, Math.min(1, livePosition / length)) : 0
 
+    function syncRealPosition(pos) {
+        root.realBase = pos;
+        root.realBaseAt = Date.now();
+        root.livePosition = pos;
+    }
+
     Timer {
+        // leitura real da posição (só tocando)
+        interval: 2000
+        repeat: true
+        running: root.playing
+        onTriggered: if (root.player && root.player.dbusName) posProc.running = true
+    }
+
+    Process {
+        id: posProc
+
+        command: ["busctl", "--user", "get-property",
+                  root.player ? root.player.dbusName : "",
+                  "/org/mpris/MediaPlayer2", "org.mpris.MediaPlayer2.Player", "Position"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const m = text.match(/u\s+(\d+)/);
+                if (m)
+                    root.syncRealPosition(Number(m[1]) / 1000000);
+            }
+        }
+    }
+
+    Timer {
+        // suaviza entre as leituras
         interval: 500
         repeat: true
         running: root.playing
         onTriggered: {
-            if (root.player && root.player.positionSupported) {
-                // Lê a posição real: o getter é sempre atual, mas o sinal só
-                // dispara se for forçado (doc do MprisPlayer). O handler
-                // sincroniza livePosition — corrige drift, seeks e o repeat
-                // (posição volta a 0 em vez de ficar presa no fim).
-                root.player.positionChanged();
-            } else if (root.livePosition < root.length) {
-                root.livePosition = Math.min(root.length, root.livePosition + 0.5);
-            }
+            if (root.playing && root.realBaseAt > 0)
+                root.livePosition = root.realBase + (Date.now() - root.realBaseAt) / 1000;
         }
     }
 
     function seekTo(fraction) {
         if (!root.canSeek || root.length <= 0)
             return;
-        root.player.position = Math.max(0, Math.min(1, fraction)) * root.length;
-        root.livePosition = root.player.position;
+        const target = Math.max(0, Math.min(1, fraction)) * root.length;
+        // Seek relativo calculado da nossa posição real: o alvo via
+        // player.position usaria o cache do Quickshell, que desanda.
+        root.player.seek(target - root.livePosition);
+        root.syncRealPosition(target);
     }
 
     // ---------- painel (abre no hover da ilha) ----------
@@ -266,7 +298,7 @@ Singleton {
 
     // ---------- troca de faixa ----------
     function refreshTrack() {
-        root.livePosition = root.position;
+        root.syncRealPosition(0);
         artDebounce.restart();
         lyricsDebounce.restart();
     }
@@ -290,7 +322,6 @@ Singleton {
         function onTrackTitleChanged() { root.refreshTrack(); }
         function onTrackArtistChanged() { root.refreshTrack(); }
         function onTrackArtUrlChanged() { root.refreshTrack(); }
-        function onPositionChanged() { root.livePosition = root.position; }
     }
 
     Component.onCompleted: if (root.title !== "") root.refreshTrack()

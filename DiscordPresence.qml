@@ -56,7 +56,7 @@ Singleton {
 
         let state = null;
         if (root.deezerPlaying) {
-            const start = Math.floor(Date.now() / 1000 - Music.position);
+            const start = Math.floor(Date.now() / 1000 - Music.livePosition);
             state = {
                 title: Music.title,
                 artist: Music.artist,
