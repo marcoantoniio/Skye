@@ -53,6 +53,10 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: 10
 
+        OpenCodeBot {
+            Layout.alignment: Qt.AlignVCenter
+        }
+
         Text {
             Layout.fillWidth: true
             text: root.shortDir + (OpenCode.model !== "" ? " · " + OpenCode.model : "")
