@@ -21,7 +21,7 @@ Item {
             return "snow";
         if (Weather.tempC >= 29)
             return "hot";
-        if (Weather.tempC <= 14)
+        if (Weather.tempC <= 19)
             return "cold";
         return "mild";
     }
@@ -32,5 +32,6 @@ Item {
         sourceSize.height: 104
         fillMode: Image.PreserveAspectFit
         smooth: true
+        cache: false
     }
 }
