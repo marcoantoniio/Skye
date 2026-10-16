@@ -56,8 +56,9 @@ but it works on any compositor with `wlr-layer-shell` — KWin, Hyprland, niri, 
   current line highlighted).
 - **Dashboard**: greeting ("Good morning/afternoon/evening, Name"), **calendar**
   with the current week + mini-month, **weather** with hourly forecast
-  (humidity, wind, rain) and **System** with CPU, RAM, GPU, temperature, disk
-  and uptime — all with little bars.
+  (humidity, wind, rain) and a **weather buddy** that changes with the
+  conditions (unDraw art), plus **System** with CPU, RAM, GPU, temperature,
+  disk and uptime — all with little bars.
 - **Clipboard & Notes**: clipboard history (left click copies back, right click
   removes) and notes (multiple, with title, saved to
   `~/.local/share/skye/notes.json`).
