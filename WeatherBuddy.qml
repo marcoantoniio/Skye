@@ -8,7 +8,7 @@ import QtQuick
 Item {
     id: root
 
-    implicitWidth: 52
+    implicitWidth: 38
     implicitHeight: 52
 
     readonly property string outfit: {

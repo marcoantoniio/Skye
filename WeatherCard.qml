@@ -187,10 +187,7 @@ Rectangle {
                     RowLayout {
                         anchors {
                             fill: parent
-                            leftMargin: 6
-                            topMargin: 6
-                            bottomMargin: 6
-                            rightMargin: 14
+                            margins: 6
                         }
                         spacing: 10
 
