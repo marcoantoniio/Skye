@@ -75,7 +75,7 @@ but it works on any compositor with `wlr-layer-shell` — KWin, Hyprland, niri, 
   list), "clear all", action buttons and the **system tray** in the footer.
 - **Toasts** stacked in the top-right corner (up to 4, they hide by
   themselves).
-- **Central theme** in `Theme.qml`: black background, warm white text
+- **Central theme** in `services/Theme.qml`: black background, warm white text
   (`#efeceb`), peach accent (`#f4be9e`).
 - **Proton Calendar** (optional): days with events get a dot under the number on
   the Dashboard calendar; clicking a day lists the events (time, title,
@@ -257,10 +257,10 @@ happens).
 ### Midea air conditioner
 
 Controls a Midea split air conditioner **locally** (LAN, V3 protocol), without
-the Midea cloud. `midea_rpc.py` keeps a TCP connection to the unit and
-`Midea.qml` exposes its state to the panel. The token and key are extracted
-once and stored in `~/.config/skye/midea.json`; after that, control is fully
-local.
+the Midea cloud. `scripts/midea_rpc.py` keeps a TCP connection to the unit
+and `services/Midea.qml` exposes its state to the panel. The token and key are
+extracted once and stored in `~/.config/skye/midea.json`; after that, control
+is fully local.
 
 Requirements:
 
@@ -434,19 +434,19 @@ qs -c skye ipc call midea selfclean          # start self-clean
 > The globe button in the Control Center footer opens **`https://localhost`** —
 > the repository author's **local SearXNG** instance. If your machine doesn't
 > run SearXNG there (or it runs on another host/port), change the URL in
-> `ControlCenterPanel.qml` (footer, globe icon) or point it to the search
+> `panels/ControlCenterPanel.qml` (footer, globe icon) or point it to the search
 > engine of your choice.
 
 | I want to change… | File |
 |---|---|
-| Colors, fonts and metrics | `Theme.qml` |
-| Weather city (coordinates) | `Weather.qml` → `location` |
-| Friendly disk names | `ControlCenterPanel.qml` → `diskName()` |
-| Terminal button command | `ControlCenterPanel.qml` (footer) |
-| Browser button URL (local SearXNG) | `ControlCenterPanel.qml` (footer) |
-| Panel size | `Theme.qml` → `controlCenterPanelWidth` |
-| Camera panel screen | `Theme.qml` → `cameraScreenName` |
-| Dynamic island monitor | `Theme.qml` → `barScreenName` |
+| Colors, fonts and metrics | `services/Theme.qml` |
+| Weather city (coordinates) | `services/Weather.qml` → `location` |
+| Friendly disk names | `panels/ControlCenterPanel.qml` → `diskName()` |
+| Terminal button command | `panels/ControlCenterPanel.qml` (footer) |
+| Browser button URL (local SearXNG) | `panels/ControlCenterPanel.qml` (footer) |
+| Panel size | `services/Theme.qml` → `controlCenterPanelWidth` |
+| Camera panel screen | `services/Theme.qml` → `cameraScreenName` |
+| Dynamic island monitor | `services/Theme.qml` → `barScreenName` |
 | Discord Application ID (Rich Presence) | `~/.config/skye/discord_client_id.txt` |
 | Globe URL (footer button; default: startpage) | `~/.config/skye/globe_url.txt` |
 | Midea air conditioner credentials | `~/.config/skye/midea.json` |
@@ -458,26 +458,31 @@ Colors use Qt's `#AARRGGBB` format (the `AA` is the transparency).
 
 ## Structure
 
-| File | Role |
+```text
+skye/
+├── shell.qml
+├── Bar.qml
+├── services/     # global singletons (theme, i18n, state, integrations)
+├── panels/       # Control Center pages and popup panels
+├── cards/        # Dashboard cards
+├── widgets/      # small UI pieces used by the bar and panels
+├── scripts/      # Python bridges (Discord RPC and Midea)
+└── assets/       # images used by the UI
+```
+
+| Path | Role |
 |---|---|
 | `shell.qml` | entry point; creates one bar per monitor |
-| `Theme.qml` | theme (colors, fonts, metrics) and panel widths |
-| `I18n.qml` | translations (pt-BR/EN) and language IPC |
 | `Bar.qml` | the dynamic island (collapses/expands on hover) |
-| `Clock.qml`, `Bell.qml`, `WorkspacePills.qml`, `CategoryButtons.qml`, `CategoryCircle.qml` | island widgets |
-| `ControlCenter.qml`, `ControlCenterPanel.qml`, `PanelTab.qml`, `QuickToggle.qml`, `LevelRow.qml`, `LevelSlider.qml`, `DeviceMenu.qml`, `FooterIcon.qml` | Control Center |
-| `CalendarCard.qml`, `WeatherCard.qml`, `SystemCard.qml`, `Weather.qml`, `Greeting.qml` | Dashboard |
-| `Clipboard.qml` | clipboard history |
-| `Notes.qml` | notes (persisted in `~/.local/share/skye`) |
-| `Brightness.qml` | DDC/CI brightness |
-| `Workspaces.qml`, `Umbriel.qml` | desktops (KWin + Umbriel) |
-| `Notifications.qml`, `NotificationCenter.qml`, `NotificationPopup.qml`, `NotificationPopups.qml`, `FilterTab.qml` | notifications |
-| `Tray.qml` | system tray |
-| `RecentFiles.qml`, `RecentFilesPanel.qml` | recent files panel (cyan button hub) |
-| `ProtonCalendar.qml` | Proton Calendar events (vdirsyncer + khal). See Integrations |
-| `Midea.qml`, `AcButton.qml`, `AcPanel.qml`, `midea_rpc.py` | Midea air conditioner (local V3 control). See Integrations |
-| `DiscordPresence.qml`, `discord_rpc.py` | Discord Rich Presence for the Deezer track. See Integrations |
-| `OpenCode.qml`, `OpenCodeTab.qml` | OpenCode tab in the Control Center (streaming). See Integrations |
+| `services/` | singletons: `Theme.qml`, `I18n.qml`, notifications, workspaces, music/audio, weather, Proton Calendar, Midea, VPN, clipboard, notes, recorder, timers, webcam, OpenCode and Discord |
+| `panels/` | `ControlCenterPanel.qml`, `MusicPanel.qml`, `CameraPanel.qml`, `RecentFilesPanel.qml`, `AcPanel.qml`, `NotificationCenter.qml`, `VpnMenu.qml`, `DeviceMenu.qml`, `NoteEditor.qml`, `OpenCodeTab.qml` |
+| `cards/` | `CalendarCard.qml`, `WeatherCard.qml`, `SystemCard.qml` |
+| `widgets/` | island and panel pieces: clock, bell, category buttons, tabs, sliders, toggles, tray, OSDs, weather buddy and the AC/calendar helpers |
+| `scripts/` | `discord_rpc.py` (Discord Rich Presence) and `midea_rpc.py` (Midea AC bridge) |
+| `assets/` | images used by the UI |
+
+Files in subdirectories are imported with Quickshell module imports, for
+example `import qs.services`, `import qs.panels` and `import qs.widgets`.
 
 ---
 

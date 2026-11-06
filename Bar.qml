@@ -14,6 +14,9 @@
 import Quickshell
 import Quickshell.Wayland
 import QtQuick
+import qs.panels
+import qs.services
+import qs.widgets
 
 PanelWindow {
     id: bar

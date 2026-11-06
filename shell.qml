@@ -6,6 +6,7 @@
 // (Theme.barScreenName) e força a inicialização dos singletons de serviço.
 
 import Quickshell
+import qs.services
 
 ShellRoot {
     // Referenciar os singletons aqui força a criação deles na inicialização,
