@@ -120,6 +120,34 @@ but it works on any compositor with `wlr-layer-shell` — KWin, Hyprland, niri, 
 
 ## Installation
 
+### Quick install
+
+```bash
+git clone https://github.com/marcoantoniio/skye ~/.config/quickshell/skye
+cd ~/.config/quickshell/skye
+./install.sh
+```
+
+The installer checks the dependencies, installs the configuration into
+`~/.config/quickshell/skye` if it is not already there, creates the systemd
+user service and starts Skye. Running it again is safe.
+
+| Option | Effect |
+|---|---|
+| `--install-deps` | install the required packages on Arch/CachyOS (`pacman`) |
+| `--with-midea` | create the Python venv used by the Midea AC bridge |
+| `--no-service` | do not create or enable the systemd user service |
+| `--no-start` | do not start Skye now |
+| `--dry-run` | print the actions without changing anything |
+
+Optional integrations are not configured automatically. See
+[Integrations](#integrations-optional) for Proton Calendar, Midea credentials
+and Discord.
+
+### Manual installation
+
+If you prefer to install by hand:
+
 ```bash
 git clone https://github.com/marcoantoniio/skye ~/.config/quickshell/skye
 qs -c skye -n -d        # starts in the background
@@ -462,6 +490,7 @@ Colors use Qt's `#AARRGGBB` format (the `AA` is the transparency).
 skye/
 ├── shell.qml
 ├── Bar.qml
+├── install.sh    # installer
 ├── services/     # global singletons (theme, i18n, state, integrations)
 ├── panels/       # Control Center pages and popup panels
 ├── cards/        # Dashboard cards
@@ -474,6 +503,7 @@ skye/
 |---|---|
 | `shell.qml` | entry point; creates one bar per monitor |
 | `Bar.qml` | the dynamic island (collapses/expands on hover) |
+| `install.sh` | installer: dependencies, configuration, service and optional Midea venv |
 | `services/` | singletons: `Theme.qml`, `I18n.qml`, notifications, workspaces, music/audio, weather, Proton Calendar, Midea, VPN, clipboard, notes, recorder, timers, webcam, OpenCode and Discord |
 | `panels/` | `ControlCenterPanel.qml`, `MusicPanel.qml`, `CameraPanel.qml`, `RecentFilesPanel.qml`, `AcPanel.qml`, `NotificationCenter.qml`, `VpnMenu.qml`, `DeviceMenu.qml`, `NoteEditor.qml`, `OpenCodeTab.qml` |
 | `cards/` | `CalendarCard.qml`, `WeatherCard.qml`, `SystemCard.qml` |
