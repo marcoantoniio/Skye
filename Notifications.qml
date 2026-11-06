@@ -17,6 +17,8 @@ Singleton {
     id: root
 
     property bool centerOpen: false
+    // mouse sobre o sino/bolinha laranja: pré-aquece o painel (Bar.qml)
+    property bool triggerHovered: false
     // Mouse em cima do painel (fecha quando sai da ilha e do painel)
     property bool panelHovered: false
     // Menu da bandeja do sistema aberto (segura o painel durante a escolha)
@@ -78,6 +80,7 @@ Singleton {
         ControlCenter.open = false;
         RecentFiles.open = false;
         Music.panelOpen = false;
+        Midea.panelOpen = false;
         activeCategory = "";
         centerOpen = true;
     }
@@ -85,6 +88,7 @@ Singleton {
     function openCategory(name) {
         RecentFiles.open = false;
         Music.panelOpen = false;
+        Midea.panelOpen = false;
         activeCategory = name;
         centerOpen = true;
     }

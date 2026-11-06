@@ -12,7 +12,7 @@ but it works on any compositor with `wlr-layer-shell` — KWin, Hyprland, niri, 
 
 ---
 
-## ✨ Features
+## Features
 
 ### Dynamic island
 
@@ -38,6 +38,9 @@ but it works on any compositor with `wlr-layer-shell` — KWin, Hyprland, niri, 
   - **Orange** — notifications (opens/closes the panel)
   - **Magenta** — Control Center (opens/closes)
   - **Cyan** — Recent (opens/closes the recent files panel — hub)
+- **Air conditioner (optional)**: a split-unit icon next to the three buttons
+  opens a panel for local control of a Midea unit (power, mode, temperature,
+  fan, swing, eco/turbo, display and sleep). See Integrations.
 
 ### Control Center
 
@@ -55,7 +58,8 @@ but it works on any compositor with `wlr-layer-shell` — KWin, Hyprland, niri, 
   **audio output**, **per-app mixer** and **lyrics** (lrclib, with sync and the
   current line highlighted).
 - **Dashboard**: greeting ("Good morning/afternoon/evening, Name"), **calendar**
-  with the current week + mini-month, **weather** with hourly forecast
+  with the current week + a navigable mini-month (arrows change the month;
+  click the month name to return to today), **weather** with hourly forecast
   (humidity, wind, rain) and a **weather buddy** that changes with the
   conditions (unDraw art), plus **System** with CPU, RAM, GPU, temperature,
   disk and uptime — all with little bars.
@@ -82,7 +86,7 @@ but it works on any compositor with `wlr-layer-shell` — KWin, Hyprland, niri, 
 
 ---
 
-## 📦 Requirements
+## Requirements
 
 **Required**
 
@@ -108,12 +112,13 @@ but it works on any compositor with `wlr-layer-shell` — KWin, Hyprland, niri, 
 | `curl` | lyrics (lrclib) and album art |
 | `gpu-screen-recorder` | all-screens recording (Recorder button; uses NVENC/GPU and system audio + microphone) |
 | `khal`, `vdirsyncer` | Proton Calendar events on the Dashboard |
+| `python3` (with `venv`), `msmart-ng` | Midea air conditioner panel (local control). See Integrations |
 | `discord` (native, not Flatpak/Snap), `python3` | Discord Rich Presence for the Deezer track |
 | `opencode` | OpenCode tab in the Control Center (prompts with streaming responses) |
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ```bash
 git clone https://github.com/marcoantoniio/skye ~/.config/quickshell/skye
@@ -174,7 +179,7 @@ Categories=Utility;
 
 ---
 
-## 🎮 How to use
+## How to use
 
 - **Idle**: only the clock. **Hover**: the island expands and reveals the
   controls.
@@ -184,7 +189,7 @@ Categories=Utility;
 
 ---
 
-## 🧩 Integrations (optional)
+## Integrations (optional)
 
 ### Proton Calendar
 
@@ -249,6 +254,87 @@ Proton can take up to 8 hours to reflect changes in the link, and the link
 can stop working after a while (generate a new one in Proton if that
 happens).
 
+### Midea air conditioner
+
+Controls a Midea split air conditioner **locally** (LAN, V3 protocol), without
+the Midea cloud. `midea_rpc.py` keeps a TCP connection to the unit and
+`Midea.qml` exposes its state to the panel. The token and key are extracted
+once and stored in `~/.config/skye/midea.json`; after that, control is fully
+local.
+
+Requirements:
+
+- a Midea air conditioner that uses the **V3 local protocol**, connected to
+  the same network as the computer;
+- `python3` with `venv`;
+- the `msmart-ng` Python package.
+
+1. Create the virtualenv that Skye uses:
+
+```bash
+python3 -m venv ~/.local/share/skye/midea-venv
+~/.local/share/skye/midea-venv/bin/pip install --upgrade pip msmart-ng
+```
+
+2. Discover the unit and extract its credentials. Use the same account and
+   password you use in the Midea app. They are only needed to fetch the local
+   token/key:
+
+```bash
+~/.local/share/skye/midea-venv/bin/msmart-ng discover \
+  --account 'YOUR_MIDEA_ACCOUNT' \
+  --password 'YOUR_MIDEA_PASSWORD'
+```
+
+If the unit is not found, pass its IP directly:
+
+```bash
+~/.local/share/skye/midea-venv/bin/msmart-ng discover 192.168.1.50 \
+  --account 'YOUR_MIDEA_ACCOUNT' \
+  --password 'YOUR_MIDEA_PASSWORD'
+```
+
+The command prints a dict containing `ip`, `port`, `id`, `token` and `key`.
+Treat that output as a secret.
+
+3. Save the values in `~/.config/skye/midea.json`:
+
+```json
+{
+  "ip": "192.168.1.50",
+  "port": 6444,
+  "id": 123456789012345,
+  "token": "YOUR_TOKEN",
+  "key": "YOUR_KEY",
+  "name": "living-room"
+}
+```
+
+Only `ip`, `port`, `id`, `token` and `key` are required. `name` is optional
+and only appears in the logs. Then restrict the file:
+
+```bash
+chmod 600 ~/.config/skye/midea.json
+```
+
+Never commit `midea.json`: the token and key give access to the unit.
+
+4. Restart Skye so the bridge picks up the configuration:
+
+```bash
+systemctl --user restart skye.service
+```
+
+5. Hover the island and click the split-AC icon. The panel shows power, mode,
+   target temperature, fan, swing, eco/turbo, display and sleep according to
+   what the unit supports. While the panel is open, the bridge refreshes the
+   state every 20 seconds; when it is closed, it keeps a slower heartbeat to
+   detect a disconnected unit.
+
+The bridge only works on the local network. If the unit changes IP after a
+router reboot, it tries to find the device again by its ID and updates
+`midea.json` automatically.
+
 ### Discord Rich Presence
 
 Shows the track you are playing on Deezer in your Discord profile. Requires
@@ -298,7 +384,7 @@ at a directory with important files.
 
 ---
 
-## ⌨️ IPC
+## IPC
 
 ```bash
 qs -c skye ipc show                          # lists everything available
@@ -312,7 +398,7 @@ qs -c skye ipc call workspaces switchToIndex 1
 qs -c skye ipc call brightness set 40        # brightness (DDC/CI)
 qs -c skye ipc call weather refresh
 qs -c skye ipc call clipboard copy "text"
-qs -c skye ipc call recorder start           # records all screens (~/Videos)
+qs -c skye ipc call recorder start           # records all screens (/mnt/hd/videos)
 qs -c skye ipc call recorder pause           # pauses/resumes recording
 qs -c skye ipc call recorder stop            # stops and saves the file
 qs -c skye ipc call music status             # current music (MPRIS)
@@ -327,11 +413,22 @@ qs -c skye ipc call timer status             # pomodoro/stopwatch state
 qs -c skye ipc call camera toggle            # camera preview
 qs -c skye ipc call recent toggle            # recent files panel (hub)
 qs -c skye ipc call language toggle          # language: pt-BR/EN
+qs -c skye ipc call midea status             # AC state (JSON)
+qs -c skye ipc call midea refresh            # query the unit now
+qs -c skye ipc call midea power true         # power on/off
+qs -c skye ipc call midea mode COOL          # AUTO, COOL, DRY, HEAT, FAN_ONLY
+qs -c skye ipc call midea temp 24            # target temperature (16-30)
+qs -c skye ipc call midea fan AUTO           # AUTO, MAX, HIGH, MEDIUM, LOW, SILENT
+qs -c skye ipc call midea swing OFF          # OFF, VERTICAL, HORIZONTAL, BOTH
+qs -c skye ipc call midea eco true
+qs -c skye ipc call midea turbo true
+qs -c skye ipc call midea display true
+qs -c skye ipc call midea selfclean          # start self-clean
 ```
 
 ---
 
-## 🎨 Customization
+## Customization
 
 > [!WARNING]
 > The globe button in the Control Center footer opens **`https://localhost`** —
@@ -351,13 +448,15 @@ qs -c skye ipc call language toggle          # language: pt-BR/EN
 | Camera panel screen | `Theme.qml` → `cameraScreenName` |
 | Dynamic island monitor | `Theme.qml` → `barScreenName` |
 | Discord Application ID (Rich Presence) | `~/.config/skye/discord_client_id.txt` |
+| Globe URL (footer button; default: startpage) | `~/.config/skye/globe_url.txt` |
+| Midea air conditioner credentials | `~/.config/skye/midea.json` |
 | Proton Calendar sharing link | `~/.config/vdirsyncer/config` |
 
 Colors use Qt's `#AARRGGBB` format (the `AA` is the transparency).
 
 ---
 
-## 📁 Structure
+## Structure
 
 | File | Role |
 |---|---|
@@ -376,12 +475,13 @@ Colors use Qt's `#AARRGGBB` format (the `AA` is the transparency).
 | `Tray.qml` | system tray |
 | `RecentFiles.qml`, `RecentFilesPanel.qml` | recent files panel (cyan button hub) |
 | `ProtonCalendar.qml` | Proton Calendar events (vdirsyncer + khal). See Integrations |
+| `Midea.qml`, `AcButton.qml`, `AcPanel.qml`, `midea_rpc.py` | Midea air conditioner (local V3 control). See Integrations |
 | `DiscordPresence.qml`, `discord_rpc.py` | Discord Rich Presence for the Deezer track. See Integrations |
 | `OpenCode.qml`, `OpenCodeTab.qml` | OpenCode tab in the Control Center (streaming). See Integrations |
 
 ---
 
-## 📝 Notes and limitations
+## Notes and limitations
 
 - The Control Center panel has a **fixed height** so it doesn't reposition when
   switching tabs.
@@ -393,18 +493,21 @@ Colors use Qt's `#AARRGGBB` format (the `AA` is the transparency).
 - **Clipboard**: the history uses `wl-clipboard` (`wl-paste --watch` +
   `wl-copy`); without it installed, the tab shows "unavailable".
 - **Brightness**: depends on the monitor supporting DDC/CI.
+- **Air conditioner**: works only on the local network, with Midea units that
+  speak the V3 protocol. The token and key live in
+  `~/.config/skye/midea.json`; keep that file private and out of git.
 - The audio device menu doesn't close when clicking outside (a limitation of
   nested popups on Wayland); close it by clicking the arrow or picking an item.
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 - Quickshell: <https://quickshell.org/docs/>
 - Umbriel (compositor): <https://docs.noctalia.dev/umbriel/>
 
 ---
 
-## 📄 License
+## License
 
 MIT — see [`LICENSE`](LICENSE).

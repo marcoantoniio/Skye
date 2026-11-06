@@ -13,6 +13,9 @@ PopupWindow {
     property string kind: "sink"
     property var panelRef: null
 
+    // Mouse em cima do menu (o painel usa para segurar o fechamento)
+    readonly property bool hovered: menuHover.hovered
+
     signal dismissed()
 
     readonly property var devices: {
@@ -53,6 +56,17 @@ PopupWindow {
         color: Theme.surface
         border.width: 1
         border.color: Theme.border
+
+        // entrada suave, igual ao menu de VPN
+        opacity: menu.visible ? 1 : 0
+
+        Behavior on opacity {
+            NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+        }
+
+        HoverHandler {
+            id: menuHover
+        }
 
         ColumnLayout {
             id: content

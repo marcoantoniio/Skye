@@ -15,6 +15,9 @@ RowLayout {
     property bool available: true
     property bool showArrow: true
 
+    // mouse sobre a setinha (o painel usa para fechar o menu ao sair)
+    readonly property alias arrowHovered: arrowArea.containsMouse
+
     readonly property alias arrowItem: arrowBox
 
     signal moved(real value)

@@ -27,6 +27,15 @@ Rectangle {
         return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).toLocaleString(I18n.dateLocale, "ddd d MMM").replace(/\./g, "");
     }
 
+    Connections {
+        target: ControlCenter
+
+        function onOpenChanged() {
+            if (!ControlCenter.open)
+                root.backToToday();
+        }
+    }
+
     Timer {
         interval: 60000
         running: true
@@ -64,12 +73,13 @@ Rectangle {
         return { days: days, range: range, week: isoWeek(now) };
     }
 
-    // Mini-mês: dias do mês atual com hoje destacado
+    // Mini-mês: mês exibido (navegável) com hoje destacado, se estiver no mês atual
     readonly property var month: {
         root.tick;
         const now = new Date();
-        const y = now.getFullYear();
-        const m = now.getMonth();
+        const y = ProtonCalendar.viewMonth.getFullYear();
+        const m = ProtonCalendar.viewMonth.getMonth();
+        const isCurrent = y === now.getFullYear() && m === now.getMonth();
         const startDow = new Date(y, m, 1).getDay();
         const daysInMonth = new Date(y, m + 1, 0).getDate();
         const cells = [];
@@ -77,11 +87,21 @@ Rectangle {
             cells.push({ num: 0, today: false, hasEvents: false });
         for (let d = 1; d <= daysInMonth; ++d) {
             const key = ProtonCalendar.dayKey(new Date(y, m, d));
-            cells.push({ num: d, key: key, today: d === now.getDate(), hasEvents: ProtonCalendar.eventsOn(key).length > 0 });
+            cells.push({ num: d, key: key, today: isCurrent && d === now.getDate(), hasEvents: ProtonCalendar.eventsOn(key).length > 0 });
         }
         while (cells.length % 7 !== 0)
             cells.push({ num: 0, today: false, hasEvents: false });
-        return { name: root.monthNames[m] + " " + y, cells: cells };
+        return { name: (m + 1) + " · " + root.monthNames[m] + " " + y, cells: cells };
+    }
+
+    function moveMonth(n) {
+        ProtonCalendar.shiftMonth(n);
+        root.pickedKey = ProtonCalendar.dayKey(ProtonCalendar.viewMonth);
+    }
+
+    function backToToday() {
+        ProtonCalendar.goToday();
+        root.pickedKey = "";
     }
 
     ColumnLayout {
@@ -145,12 +165,68 @@ Rectangle {
             }
         }
 
-        Text {
+        RowLayout {
             Layout.fillWidth: true
-            text: root.month.name
-            color: Theme.foregroundDim
-            font.family: Theme.fontFamily
-            font.pixelSize: 9
+            spacing: 2
+
+            Item {
+                implicitWidth: 16
+                implicitHeight: 14
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "‹"
+                    color: prevArea.containsMouse ? Theme.foreground : Theme.foregroundDim
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 14
+                }
+
+                MouseArea {
+                    id: prevArea
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.moveMonth(-1)
+                }
+            }
+
+            Text {
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                text: root.month.name
+                color: Theme.foregroundDim
+                font.family: Theme.fontFamily
+                font.pixelSize: 9
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.backToToday()
+                }
+            }
+
+            Item {
+                implicitWidth: 16
+                implicitHeight: 14
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "›"
+                    color: nextArea.containsMouse ? Theme.foreground : Theme.foregroundDim
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 14
+                }
+
+                MouseArea {
+                    id: nextArea
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.moveMonth(1)
+                }
+            }
         }
 
         GridLayout {

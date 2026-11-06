@@ -46,5 +46,6 @@ Item {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: Notifications.toggleAll()
+        onContainsMouseChanged: Notifications.triggerHovered = containsMouse
     }
 }

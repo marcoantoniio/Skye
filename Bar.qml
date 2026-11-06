@@ -46,7 +46,12 @@ PanelWindow {
         // Mesmo atraso dos timers de fechamento: o recolhimento da ilha começa
         // junto com o fechamento do painel (tudo vira uma coisa só).
         interval: 350
-        onTriggered: bar.expanded = false
+        onTriggered: {
+            bar.expanded = false;
+            // fallback: se o mouse saiu de tudo, o painel do ar fecha junto
+            if (Midea.panelOpen && !Midea.panelHovered)
+                Midea.panelOpen = false;
+        }
     }
 
     // Painel de música: fecha com atraso quando o mouse sai da ilha/painel
@@ -61,9 +66,12 @@ PanelWindow {
         id: controlCenterCloseTimer
 
         interval: 350
-        onTriggered: if (ControlCenter.open && !ControlCenter.panelHovered
-                         && !Island.hovered && !ControlCenter.deviceMenuOpen)
-                         ControlCenter.close()
+        onTriggered: {
+            if (ControlCenter.open && !ControlCenter.panelHovered
+                    && !Island.hovered && !ControlCenter.deviceMenuOpen
+                    && !ControlCenter.vpnMenuHovered)
+                ControlCenter.close();
+        }
     }
 
     // Recentes e Notificações: mesmo comportamento
@@ -82,6 +90,15 @@ PanelWindow {
         onTriggered: if (Notifications.centerOpen && !Notifications.panelHovered
                          && !Island.hovered && !Notifications.menuOpen)
                          Notifications.centerOpen = false
+    }
+
+    // Painel do ar-condicionado: fecha quando o mouse sai da ilha e do painel
+    Timer {
+        id: acCloseTimer
+
+        interval: 350
+        onTriggered: if (Midea.panelOpen && !Midea.panelHovered && !Island.hovered)
+                         Midea.panelOpen = false
     }
 
     Connections {
@@ -104,6 +121,18 @@ PanelWindow {
         // ao fechar o menu de dispositivos, reavalia (fecha se o mouse saiu)
         function onDeviceMenuOpenChanged() {
             if (!ControlCenter.deviceMenuOpen && !Island.hovered)
+                controlCenterCloseTimer.restart();
+        }
+
+        // mesmo para o menu de VPNs
+        function onVpnMenuOpenChanged() {
+            if (!ControlCenter.vpnMenuOpen && !Island.hovered)
+                controlCenterCloseTimer.restart();
+        }
+
+        // e quando o mouse sai do menu de VPNs, reavalia o fechamento
+        function onVpnMenuHoveredChanged() {
+            if (!ControlCenter.vpnMenuHovered && !ControlCenter.panelHovered && !Island.hovered)
                 controlCenterCloseTimer.restart();
         }
     }
@@ -129,6 +158,15 @@ PanelWindow {
         function onMenuOpenChanged() {
             if (!Notifications.menuOpen && !Island.hovered)
                 notificationsCloseTimer.restart();
+        }
+    }
+
+    Connections {
+        target: Midea
+
+        function onPanelHoveredChanged() {
+            if (!Midea.panelHovered && !Island.hovered)
+                acCloseTimer.restart();
         }
     }
 
@@ -181,9 +219,15 @@ PanelWindow {
             : (Notifications.centerOpen ? Theme.notificationPanelWidth
             : (Music.panelOpen ? Theme.musicPanelWidth
             : (RecentFiles.open ? Theme.recentPanelWidth
-            : (Webcam.open && bar.screen === Webcam.screen ? Theme.cameraPanelWidth : baseWidth))))
+            : (Midea.panelOpen ? Theme.acPanelWidth
+            : (Webcam.open && bar.screen === Webcam.screen ? Theme.cameraPanelWidth : baseWidth)))))
 
-        property real animatedPanelWidth: panelTargetWidth
+        // Parte da largura visível atual (hover incluso): ao abrir um painel a
+        // largura cresce JUNTO com a altura. Antes o max() segurava a largura
+        // no tamanho da ilha e o crescimento lateral só aparecia no fim da
+        // animação (parecia "desce e depois abre").
+        property real animatedPanelWidth: Math.max(panelTargetWidth,
+            baseWidth + reveal * (sideWidth * 2 + Theme.spacing * 2))
 
         Behavior on animatedPanelWidth {
             // Mesmo tempo/curva do morph dos painéis: a ilha encolhe junto com
@@ -240,12 +284,14 @@ PanelWindow {
                     controlCenterCloseTimer.stop();
                     recentCloseTimer.stop();
                     notificationsCloseTimer.stop();
+                    acCloseTimer.stop();
                 } else {
                     collapseTimer.start();
                     musicCloseTimer.start();
                     controlCenterCloseTimer.start();
                     recentCloseTimer.start();
                     notificationsCloseTimer.start();
+                    acCloseTimer.start();
                 }
             }
         }
@@ -331,6 +377,7 @@ PanelWindow {
                         ControlCenter.close();
                         Notifications.centerOpen = false;
                         RecentFiles.close();
+                        Midea.panelOpen = false;
                         Music.panelOpen = true;
                     }
                 }
@@ -340,7 +387,7 @@ PanelWindow {
                     interval: 200
                     onTriggered: {
                         if (dwellArea.containsMouse && Music.playing && !ControlCenter.open
-                                && !Notifications.centerOpen && !Webcam.open)
+                                && !Notifications.centerOpen && !Webcam.open && !Midea.panelOpen)
                             Music.panelOpen = true;
                     }
                 }
@@ -387,9 +434,38 @@ PanelWindow {
                     right: parent.right
                     verticalCenter: parent.verticalCenter
                 }
-                spacing: 8
+                // espaço maior entre as bolinhas e o ar (equilibra o grupo)
+                spacing: 14
 
-                CategoryButtons {}
+                // Bolinhas centralizadas na altura da linha (o botão do ar
+                // tem 26px; sem o wrapper elas ficariam no topo)
+                Item {
+                    width: dotsRow.implicitWidth
+                    height: 26
+
+                    CategoryButtons {
+                        id: dotsRow
+
+                        anchors.centerIn: parent
+                    }
+                }
+
+                AcButton {
+                    id: acButton
+
+                    onActivated: {
+                        if (Midea.panelOpen) {
+                            Midea.panelOpen = false;
+                        } else {
+                            ControlCenter.close();
+                            Notifications.centerOpen = false;
+                            RecentFiles.close();
+                            Music.panelOpen = false;
+                            Webcam.open = false;
+                            Midea.panelOpen = true;
+                        }
+                    }
+                }
             }
         }
     }
@@ -418,9 +494,61 @@ PanelWindow {
         panelWindow: bar
     }
 
-    NotificationCenter {
-        panelWindow: bar
-        anchorItem: pill
+    // Central de notificações: janela sob demanda. O hover no sino/bolinha
+    // laranja pré-carrega — o clique já abre com a janela mapeada, sem blink.
+    property var notificationCenterPanel: null
+
+    Component {
+        id: notificationCenterComp
+
+        NotificationCenter {
+            panelWindow: bar
+            anchorItem: pill
+        }
+    }
+
+    function ensureNotificationCenter() {
+        if (bar.notificationCenterPanel === null)
+            bar.notificationCenterPanel = notificationCenterComp.createObject(bar);
+    }
+
+    Connections {
+        target: Notifications
+
+        function onCenterOpenChanged() {
+            if (Notifications.centerOpen) {
+                notificationUnload.stop();
+                bar.ensureNotificationCenter();
+            } else if (bar.notificationCenterPanel !== null) {
+                notificationUnload.restart();
+            }
+        }
+
+        function onTriggerHoveredChanged() {
+            if (Notifications.triggerHovered) {
+                notificationUnload.stop();
+                bar.ensureNotificationCenter();
+            } else if (bar.notificationCenterPanel !== null && !Notifications.centerOpen) {
+                notificationUnload.restart();
+            }
+        }
+    }
+
+    Timer {
+        id: notificationUnload
+
+        interval: 1000
+        onTriggered: {
+            if (bar.notificationCenterPanel !== null && !Notifications.centerOpen
+                    && !Notifications.triggerHovered) {
+                if (bar.notificationCenterPanel.shown) {
+                    Island.panelsShown -= 1;
+                    bar.notificationCenterPanel.shown = false;
+                }
+                bar.notificationCenterPanel.destroy();
+                bar.notificationCenterPanel = null;
+            }
+        }
     }
 
     ControlCenterPanel {
@@ -433,12 +561,108 @@ PanelWindow {
         anchorItem: pill
     }
 
-    CameraPanel {
-        panelWindow: bar
-        anchorItem: pill
+    // Câmera: janela criada só quando usada e destruída depois do morph de
+    // fechamento — é o painel mais pesado (stack de mídia) e o menos usado.
+    property var cameraPanel: null
+
+    Component {
+        id: cameraPanelComp
+
+        CameraPanel {
+            panelWindow: bar
+            anchorItem: pill
+        }
     }
 
-    RecentFilesPanel {
+    Connections {
+        target: Webcam
+
+        function onOpenChanged() {
+            if (Webcam.open) {
+                cameraUnload.stop();
+                if (bar.cameraPanel === null && bar.screen === Webcam.screen)
+                    bar.cameraPanel = cameraPanelComp.createObject(bar);
+            } else if (bar.cameraPanel !== null) {
+                cameraUnload.restart();
+            }
+        }
+    }
+
+    Timer {
+        id: cameraUnload
+
+        interval: 1000
+        onTriggered: {
+            if (bar.cameraPanel !== null && !Webcam.open) {
+                // se o morph de fechamento não terminou, corrige a contagem
+                // global antes de destruir a janela
+                if (bar.cameraPanel.shown) {
+                    Island.panelsShown -= 1;
+                    bar.cameraPanel.shown = false;
+                }
+                bar.cameraPanel.destroy();
+                bar.cameraPanel = null;
+            }
+        }
+    }
+
+    // Recentes: mesmo esquema (hover na bolinha ciano pré-carrega).
+    property var recentPanel: null
+
+    Component {
+        id: recentPanelComp
+
+        RecentFilesPanel {
+            panelWindow: bar
+            anchorItem: pill
+        }
+    }
+
+    function ensureRecentPanel() {
+        if (bar.recentPanel === null)
+            bar.recentPanel = recentPanelComp.createObject(bar);
+    }
+
+    Connections {
+        target: RecentFiles
+
+        function onOpenChanged() {
+            if (RecentFiles.open) {
+                recentUnload.stop();
+                bar.ensureRecentPanel();
+            } else if (bar.recentPanel !== null) {
+                recentUnload.restart();
+            }
+        }
+
+        function onTriggerHoveredChanged() {
+            if (RecentFiles.triggerHovered) {
+                recentUnload.stop();
+                bar.ensureRecentPanel();
+            } else if (bar.recentPanel !== null && !RecentFiles.open) {
+                recentUnload.restart();
+            }
+        }
+    }
+
+    Timer {
+        id: recentUnload
+
+        interval: 1000
+        onTriggered: {
+            if (bar.recentPanel !== null && !RecentFiles.open
+                    && !RecentFiles.triggerHovered) {
+                if (bar.recentPanel.shown) {
+                    Island.panelsShown -= 1;
+                    bar.recentPanel.shown = false;
+                }
+                bar.recentPanel.destroy();
+                bar.recentPanel = null;
+            }
+        }
+    }
+
+    AcPanel {
         panelWindow: bar
         anchorItem: pill
     }

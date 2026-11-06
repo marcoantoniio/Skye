@@ -99,45 +99,53 @@ PanelWindow {
         }
     }
 
+    function openNow() {
+        if (!shown) {
+            const switching = Island.panelsShown > 0;
+            Island.panelsShown += 1;
+            center.switchMorph = false;
+            morphW.stop();
+            morphH.stop();
+            if (switching) {
+                // Troca: nasce no tamanho do painel antigo e morfa até o seu
+                center.frameW = Island.lastPanelWidth > 0 ? Island.lastPanelWidth : center.fullW;
+                center.frameH = Island.lastPanelHeight > 0 ? Island.lastPanelHeight : center.fullH;
+                Island.switchTargetWidth = center.fullW;
+                Island.switchTargetHeight = center.fullH;
+                // Avisa quem está saindo para acompanhar o morph agora
+                Island.switchSeq += 1;
+            } else {
+                // Abertura normal: cresce de 0 (saindo da ilha)
+                center.frameW = center.fullW;
+                center.frameH = 0;
+            }
+            shown = true;
+            morphW.from = center.frameW;
+            morphW.to = center.fullW;
+            morphH.from = center.frameH;
+            morphH.to = center.fullH;
+            morphW.start();
+            morphH.start();
+        } else {
+            // Reabriu durante a saída: volta ao tamanho final
+            morphW.stop();
+            morphH.stop();
+            morphW.from = center.frameW;
+            morphW.to = center.fullW;
+            morphH.from = center.frameH;
+            morphH.to = center.fullH;
+            morphW.start();
+            morphH.start();
+        }
+    }
+
+    // A janela é criada sob demanda (Bar.qml): ao nascer já com wanted=true,
+    // precisa abrir na hora.
+    Component.onCompleted: if (wanted) openNow()
+
     onWantedChanged: {
         if (wanted) {
-            if (!shown) {
-                const switching = Island.panelsShown > 0;
-                Island.panelsShown += 1;
-                center.switchMorph = false;
-                morphW.stop();
-                morphH.stop();
-                if (switching) {
-                    // Troca: nasce no tamanho do painel antigo e morfa até o seu
-                    center.frameW = Island.lastPanelWidth > 0 ? Island.lastPanelWidth : center.fullW;
-                    center.frameH = Island.lastPanelHeight > 0 ? Island.lastPanelHeight : center.fullH;
-                    Island.switchTargetWidth = center.fullW;
-                    Island.switchTargetHeight = center.fullH;
-                    // Avisa quem está saindo para acompanhar o morph agora
-                    Island.switchSeq += 1;
-                } else {
-                    // Abertura normal: cresce de 0 (saindo da ilha)
-                    center.frameW = center.fullW;
-                    center.frameH = 0;
-                }
-                shown = true;
-                morphW.from = center.frameW;
-                morphW.to = center.fullW;
-                morphH.from = center.frameH;
-                morphH.to = center.fullH;
-                morphW.start();
-                morphH.start();
-            } else {
-                // Reabriu durante a saída: volta ao tamanho final
-                morphW.stop();
-                morphH.stop();
-                morphW.from = center.frameW;
-                morphW.to = center.fullW;
-                morphH.from = center.frameH;
-                morphH.to = center.fullH;
-                morphW.start();
-                morphH.start();
-            }
+            openNow();
         } else if (shown) {
             // Guarda o tamanho atual para a próxima troca começar daqui
             Island.lastPanelWidth = center.frameW;

@@ -17,6 +17,7 @@ Row {
         dotColor: Theme.accent
         selected: Notifications.centerOpen && Notifications.activeCategory === ""
         onActivated: Notifications.toggleAll()
+        onHoveredChanged: Notifications.triggerHovered = hovered
     }
 
     // ---- control center ----
@@ -31,5 +32,6 @@ Row {
         dotColor: Theme.accentCool
         selected: RecentFiles.open
         onActivated: RecentFiles.toggle()
+        onHoveredChanged: RecentFiles.triggerHovered = hovered
     }
 }

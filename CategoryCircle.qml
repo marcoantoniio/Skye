@@ -15,6 +15,9 @@ Item {
     implicitWidth: 10
     implicitHeight: 10
 
+    // mouse em cima (usado para pré-aquecer os painéis caros)
+    readonly property alias hovered: circleArea.containsMouse
+
     // Brilho em volta (halo) — some quando o botão está selecionado/apagado
     Shape {
         anchors.centerIn: parent

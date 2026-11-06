@@ -15,6 +15,7 @@ ShellRoot {
     readonly property var _umbriel: Umbriel.workspaces
     readonly property var _i18n: I18n.language
     readonly property var _discord: DiscordPresence.clientId
+    readonly property var _midea: Midea.online
 
     // A ilha dinâmica só no monitor principal (Theme.barScreenName); se o nome
     // não existir no setup, cai no primeiro monitor.

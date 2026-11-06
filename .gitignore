@@ -9,3 +9,6 @@
 
 # Cache do Python (testes locais)
 __pycache__/
+
+# Credenciais locais do ar-condicionado (nunca versionar)
+midea.json

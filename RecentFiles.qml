@@ -13,6 +13,8 @@ Singleton {
     id: root
 
     property bool open: false
+    // mouse sobre a bolinha ciano: pré-aquece o painel (Bar.qml)
+    property bool triggerHovered: false
     // Mouse em cima do painel (fecha quando sai da ilha e do painel)
     property bool panelHovered: false
     property var files: []
@@ -73,6 +75,7 @@ Singleton {
             Notifications.centerOpen = false;
             Webcam.open = false;
             Music.panelOpen = false;
+            Midea.panelOpen = false;
         }
         open = !open;
     }
@@ -82,6 +85,7 @@ Singleton {
         Notifications.centerOpen = false;
         Webcam.open = false;
         Music.panelOpen = false;
+        Midea.panelOpen = false;
         open = true;
     }
 

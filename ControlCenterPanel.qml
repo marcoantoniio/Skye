@@ -28,6 +28,9 @@ PanelWindow {
     property string gpuText: "—"
     property string gpuLabel: "GPU"
     property real gpuProgress: -1
+    // URL do globo no rodapé: padrão startpage; para apontar para outro alvo
+    // (ex.: um SearXNG local) coloque a URL em ~/.config/skye/globe_url.txt
+    property string globeUrl: "https://www.startpage.com/"
     property string tempText: "—"
     property var disks: []
     property string uptimeText: "—"
@@ -39,6 +42,13 @@ PanelWindow {
 
     // reflete no singleton (o timer de fechamento da barra consulta)
     onDeviceMenuOpenChanged: ControlCenter.deviceMenuOpen = deviceMenuOpen
+
+    // Menu de VPNs (botão de rede) — mesmo esquema
+    property bool vpnMenuOpen: false
+    property var vpnMenuAnchor: null
+    property bool vpnMenuHovered: false
+    onVpnMenuOpenChanged: ControlCenter.vpnMenuOpen = vpnMenuOpen
+    onVpnMenuHoveredChanged: ControlCenter.vpnMenuHovered = vpnMenuHovered
 
     // Métricas para o card "Sistema" (3ª coluna do Dashboard)
     readonly property var sysMetrics: {
@@ -385,6 +395,19 @@ PanelWindow {
             const dir = ControlCenter.tab > panel._lastTab ? 1 : -1;
             panel._lastTab = ControlCenter.tab;
             panel.animatePage(dir);
+            // menus não sobrevivem à troca de aba
+            panel.vpnMenuOpen = false;
+            panel.vpnMenuHovered = false;
+            panel.deviceMenuOpen = false;
+        }
+
+        function onOpenChanged() {
+            // fecha os menus junto com o painel (bolinha, ✕, mouse fora, ...)
+            if (!ControlCenter.open) {
+                panel.vpnMenuOpen = false;
+                panel.vpnMenuHovered = false;
+                panel.deviceMenuOpen = false;
+            }
         }
     }
 
@@ -424,11 +447,31 @@ PanelWindow {
         onTriggered: sysProc.running = true
     }
 
+    // URL do globo (opcional): ~/.config/skye/globe_url.txt
+    Process {
+        id: globeUrlProc
+
+        command: ["cat", Quickshell.env("HOME") + "/.config/skye/globe_url.txt"]
+        running: true
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const v = text.trim();
+                if (v !== "")
+                    panel.globeUrl = v;
+            }
+        }
+    }
+
     // ---- notas: carrega a nota atual nos campos (título + corpo) ----
     function loadCurrentNote() {
-        const n = Notes.notes[Notes.current];
+        const n = (Notes.current >= 0 && Notes.current < Notes.notes.count)
+            ? Notes.notes.get(Notes.current)
+            : null;
+        clipPage.loadingNote = true;
         notesTitle.text = n ? (n.title || "") : "";
-        notesEdit.text = n ? (n.body || "") : "";
+        noteEditor.load(n ? (n.body || "") : "");
+        clipPage.loadingNote = false;
     }
 
     Connections {
@@ -634,13 +677,22 @@ PanelWindow {
                         rowSpacing: 8
 
                         QuickToggle {
+                            id: networkToggle
+
                             Layout.fillWidth: true
-                            glyph: "\u{F0201}" // nf-md-earth (rede)
+                            // nf-md-vpn com VPN ativa; nf-md-earth (rede) sem
+                            glyph: Vpn.active ? "\u{F0582}" : "\u{F0201}"
                             label: I18n.tr("network")
                             active: Networking.connectivity === NetworkConnectivity.Full
                             onActivated: {
-                                if (Networking.wifiHardwareEnabled)
-                                    Networking.wifiEnabled = !Networking.wifiEnabled;
+                                panel.deviceMenuOpen = false;
+                                if (panel.vpnMenuOpen) {
+                                    panel.vpnMenuOpen = false;
+                                    panel.vpnMenuHovered = false;
+                                } else {
+                                    panel.vpnMenuAnchor = networkToggle;
+                                    panel.vpnMenuOpen = true;
+                                }
                             }
                         }
 
@@ -860,12 +912,14 @@ PanelWindow {
                                         panel.sink.audio.muted = !panel.sink.audio.muted;
                                 }
                                 onArrowClicked: {
+                                    panel.vpnMenuOpen = false;
                                     if (panel.deviceMenuOpen && panel.deviceMenuKind === "sink") {
                                         panel.deviceMenuOpen = false;
                                     } else {
                                         panel.deviceMenuAnchor = sinkRow.arrowItem;
                                         panel.deviceMenuKind = "sink";
                                         panel.deviceMenuOpen = true;
+                                        deviceMenuCloseTimer.stop();
                                     }
                                 }
                             }
@@ -888,12 +942,14 @@ PanelWindow {
                                         panel.source.audio.muted = !panel.source.audio.muted;
                                 }
                                 onArrowClicked: {
+                                    panel.vpnMenuOpen = false;
                                     if (panel.deviceMenuOpen && panel.deviceMenuKind === "source") {
                                         panel.deviceMenuOpen = false;
                                     } else {
                                         panel.deviceMenuAnchor = sourceRow.arrowItem;
                                         panel.deviceMenuKind = "source";
                                         panel.deviceMenuOpen = true;
+                                        deviceMenuCloseTimer.stop();
                                     }
                                 }
                             }
@@ -1141,6 +1197,44 @@ PanelWindow {
                     spacing: 8
 
                     property real shiftX: 0
+                    // Edição inline (sem modos separados): a nota fica sempre
+                    // renderizada; clicar nela abre o editor no lugar.
+                    property bool editing: false
+                    property bool loadingNote: false
+                    readonly property string currentBody: Notes.currentBody
+
+                    // Markdown → StyledText compacto: títulos, listas, negrito,
+                    // itálico, código e links, com espaçamento justo (o
+                    // renderizador padrão deixa as listas muito abertas).
+                    function renderNote(md) {
+                        const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                        const inline = (s) => {
+                            let t = esc(s);
+                            t = t.replace(/`([^`]+)`/g, "$1");
+                            t = t.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+                            t = t.replace(/\*([^*]+)\*/g, "<i>$1</i>");
+                            t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<a href=\"$2\">$1</a>");
+                            return t;
+                        };
+                        const out = [];
+                        const lines = md.split("\n");
+                        for (let i = 0; i < lines.length; ++i) {
+                            const line = lines[i].replace(/\s+$/, "");
+                            let m;
+                            if ((m = line.match(/^(#{1,6})\s+(.*)$/))) {
+                                const size = Math.max(3, 6 - m[1].length);
+                                out.push("<b><font size=\"" + size + "\">" + inline(m[2]) + "</font></b><br>");
+                            } else if ((m = line.match(/^\s*[-*]\s+(.*)$/))) {
+                                out.push("&nbsp;&nbsp;• " + inline(m[1]) + "<br>");
+                            } else if ((m = line.match(/^\s*(\d+)[.)]\s+(.*)$/))) {
+                                out.push("&nbsp;&nbsp;" + m[1] + ". " + inline(m[2]) + "<br>");
+                            } else {
+                                out.push(inline(line) + "<br>");
+                            }
+                        }
+                        return out.join("");
+                    }
+
                     transform: Translate { x: clipPage.shiftX }
 
                 RowLayout {
@@ -1174,10 +1268,16 @@ PanelWindow {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    implicitHeight: 110
+                    // Altura acompanha o conteúdo: pequeno quando vazio, cresce
+                    // até o tamanho cheio (110) conforme os itens aparecem.
+                    implicitHeight: Math.min(110, Math.max(44, Clipboard.items.length * 32 + 8))
                     radius: 10
                     color: Theme.card
                     clip: true
+
+                    Behavior on implicitHeight {
+                        NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+                    }
 
                     ListView {
                         id: histList
@@ -1332,7 +1432,7 @@ PanelWindow {
                                 model: Notes.notes
 
                                 delegate: Rectangle {
-                                    required property var modelData
+                                    required property string title
                                     required property int index
 
                                     readonly property bool current: index === Notes.current
@@ -1351,7 +1451,7 @@ PanelWindow {
 
                                         anchors.centerIn: parent
                                         width: parent.width - 16
-                                        text: modelData.title !== "" ? modelData.title : I18n.tr("untitled")
+                                        text: title !== "" ? title : I18n.tr("untitled")
                                         color: current ? Theme.accent : Theme.foreground
                                         font.family: Theme.fontFamily
                                         font.pixelSize: 10
@@ -1519,7 +1619,7 @@ PanelWindow {
                                 font.bold: true
                                 selectByMouse: true
                                 clip: true
-                                onTextChanged: Notes.update(notesTitle.text, notesEdit.text)
+                                onTextChanged: if (!clipPage.loadingNote) Notes.update(notesTitle.text, noteEditor.text)
 
                                 Text {
                                     anchors.fill: parent
@@ -1531,22 +1631,80 @@ PanelWindow {
                                 }
                             }
 
+                            // modo do editor, estilo Helix: INS / NOR (com prefixo pendente)
+                            Text {
+                                visible: clipPage.editing
+                                text: noteEditor.modeLabel
+                                color: noteEditor.mode === "normal" ? Theme.foregroundDim : Theme.accent
+                                font.family: Theme.fontFamily
+                                font.pixelSize: 9
+                                font.bold: true
+                            }
+
                         }
 
-                        TextEdit {
-                            id: notesEdit
-
+                        Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            color: Theme.foreground
-                            selectionColor: Theme.accent
-                            selectedTextColor: Theme.background
-                            font.family: Theme.fontFamily
-                            font.pixelSize: 12
-                            wrapMode: TextEdit.Wrap
-                            selectByMouse: true
-                            clip: true
-                            onTextChanged: Notes.update(notesTitle.text, notesEdit.text)
+
+                            // Nota renderizada (padrão). Clique: edita no lugar.
+                            Flickable {
+                                id: mdFlick
+
+                                anchors.fill: parent
+                                visible: !clipPage.editing
+                                clip: true
+                                contentWidth: width
+                                contentHeight: mdView.implicitHeight
+                                boundsBehavior: Flickable.StopAtBounds
+
+                                Text {
+                                    id: mdView
+
+                                    // durante a edição o texto renderizado fica congelado:
+                                    // evita re-parsear a nota inteira a cada tecla
+                                    property string frozen: ""
+
+                                    width: mdFlick.width
+                                    text: clipPage.editing ? frozen
+                                        : clipPage.renderNote(clipPage.currentBody)
+                                    textFormat: Text.StyledText
+                                    wrapMode: Text.Wrap
+                                    color: Theme.foreground
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: 12
+                                }
+
+                                MouseArea {
+                                    id: mdArea
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: mdView.linkAt(mouseX, mouseY) !== ""
+                                        ? Qt.PointingHandCursor
+                                        : Qt.IBeamCursor
+                                    onClicked: (mouse) => {
+                                        const link = mdView.linkAt(mouse.x, mouse.y);
+                                        if (link !== "") {
+                                            Quickshell.execDetached(["xdg-open", link]);
+                                        } else {
+                                            mdView.frozen = clipPage.renderNote(clipPage.currentBody);
+                                            clipPage.editing = true;
+                                            noteEditor.begin();
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Editor estilo Helix (INS/NOR; Esc alterna)
+                            NoteEditor {
+                                id: noteEditor
+
+                                anchors.fill: parent
+                                visible: clipPage.editing
+                                onEdited: (t) => Notes.update(notesTitle.text, t)
+                                onDone: clipPage.editing = false
+                            }
                         }
                     }
                 }
@@ -1585,8 +1743,8 @@ PanelWindow {
                 }
 
                 FooterIcon {
-                    glyph: "\u{F01E7}" // globo/navegador (SearXNG local)
-                    onActivated: Quickshell.execDetached(["xdg-open", "https://localhost"])
+                    glyph: "\u{F01E7}" // globo/navegador (URL em panel.globeUrl)
+                    onActivated: Quickshell.execDetached(["xdg-open", panel.globeUrl])
                 }
 
                 FooterIcon {
@@ -1618,5 +1776,102 @@ PanelWindow {
         kind: panel.deviceMenuKind
         visible: panel.deviceMenuOpen && panel.deviceMenuAnchor !== null
         onDismissed: panel.deviceMenuOpen = false
+    }
+
+    // Menu de VPNs (aberto pelo botão de rede do quick settings)
+    VpnMenu {
+        id: vpnMenu
+
+        panelRef: panel
+        anchorTarget: panel.vpnMenuAnchor
+        visible: panel.vpnMenuOpen && panel.vpnMenuAnchor !== null
+        onDismissed: {
+            panel.vpnMenuOpen = false;
+            panel.vpnMenuHovered = false;
+        }
+    }
+
+    // Fecha o menu de VPN quando o mouse sai do botão de rede e do menu
+    // (com carência para dar tempo de mover do botão até o menu)
+    Timer {
+        id: vpnMenuCloseTimer
+
+        interval: 350
+        onTriggered: {
+            if (panel.vpnMenuOpen && !networkToggle.hovered && !vpnMenu.hovered) {
+                panel.vpnMenuOpen = false;
+                panel.vpnMenuHovered = false;
+            }
+        }
+    }
+
+    Connections {
+        target: networkToggle
+
+        function onHoveredChanged() {
+            if (networkToggle.hovered)
+                vpnMenuCloseTimer.stop();
+            else if (panel.vpnMenuOpen)
+                vpnMenuCloseTimer.restart();
+        }
+    }
+
+    Connections {
+        target: vpnMenu
+
+        function onHoveredChanged() {
+            panel.vpnMenuHovered = vpnMenu.hovered;
+            if (vpnMenu.hovered)
+                vpnMenuCloseTimer.stop();
+            else if (panel.vpnMenuOpen)
+                vpnMenuCloseTimer.restart();
+        }
+    }
+
+    // Fecha o menu de dispositivos quando o mouse sai da setinha e do menu
+    // (mesma carência do menu de VPN)
+    Timer {
+        id: deviceMenuCloseTimer
+
+        interval: 350
+        onTriggered: {
+            if (!panel.deviceMenuOpen)
+                return;
+            const overArrow = panel.deviceMenuKind === "sink"
+                ? sinkRow.arrowHovered
+                : sourceRow.arrowHovered;
+            if (!overArrow && !deviceMenu.hovered)
+                panel.deviceMenuOpen = false;
+        }
+    }
+
+    function refreshDeviceMenuHover() {
+        if (!panel.deviceMenuOpen)
+            return;
+        const overArrow = panel.deviceMenuKind === "sink"
+            ? sinkRow.arrowHovered
+            : sourceRow.arrowHovered;
+        if (overArrow || deviceMenu.hovered)
+            deviceMenuCloseTimer.stop();
+        else
+            deviceMenuCloseTimer.restart();
+    }
+
+    Connections {
+        target: deviceMenu
+
+        function onHoveredChanged() { panel.refreshDeviceMenuHover(); }
+    }
+
+    Connections {
+        target: sinkRow
+
+        function onArrowHoveredChanged() { panel.refreshDeviceMenuHover(); }
+    }
+
+    Connections {
+        target: sourceRow
+
+        function onArrowHoveredChanged() { panel.refreshDeviceMenuHover(); }
     }
 }

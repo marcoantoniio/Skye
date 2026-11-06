@@ -2,7 +2,8 @@ pragma Singleton
 
 // Gravador de tela (gpu-screen-recorder).
 //
-// - start(): grava todas as telas (HDMI-A-1 + DP-1 empilhados) em ~/Videos.
+// - start(): grava só a tela principal (Theme.recorderScreenName, DP-1) em
+//   /mnt/hd/videos.
 // - stop(): finaliza o arquivo; pause()/resume() pausam de verdade
 //   (comandos nativos via socket IPC do gpu-screen-recorder).
 // - Enquanto grava, a ilha mostra o indicador REC (RecordingIndicator).
@@ -22,7 +23,7 @@ Singleton {
     property string lastFile: ""
 
     readonly property string bin: "gpu-screen-recorder"
-    readonly property string videosDir: Quickshell.env("HOME") + "/Videos"
+    readonly property string videosDir: "/mnt/hd/videos"
     readonly property string socketPath: Quickshell.env("XDG_RUNTIME_DIR") + "/skye-recorder.sock"
 
     property int _nextId: 1
@@ -58,7 +59,7 @@ Singleton {
 
         proc.command = [
             root.bin,
-            "-w", "HDMI-A-1|DP-1;y=1080", // todas as telas (empilhadas na vertical)
+            "-w", Theme.recorderScreenName, // só a tela principal (DP-1)
             "-c", "mp4",            // container
             "-k", "h264",           // codec compatível (NVENC)
             "-f", "60",             // 60 fps

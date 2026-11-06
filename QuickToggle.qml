@@ -10,6 +10,8 @@ Rectangle {
     property string label: ""
     property bool active: false
     property bool available: true
+    // Mouse em cima do botão (usado p/ fechar o menu de VPN ao sair)
+    property bool hovered: false
 
     signal activated()
 
@@ -50,11 +52,24 @@ Rectangle {
         }
     }
 
+    // MouseArea cuida do clique; o hover é acompanhado por HoverHandler
+    // (o `hovered` do MouseArea não atualiza neste shell)
     MouseArea {
+        id: rowArea
+
         anchors.fill: parent
         enabled: root.available
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: root.activated()
+    }
+
+    HoverHandler {
+        id: btnHover
+
+        onHoveredChanged: {
+            console.log("DBGQT hovered=", hovered); // TEMP
+            root.hovered = hovered;
+        }
     }
 }

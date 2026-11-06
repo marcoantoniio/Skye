@@ -15,6 +15,10 @@ Singleton {
     property bool panelHovered: false
     // Menu de dispositivos de áudio aberto (segura o painel durante a escolha)
     property bool deviceMenuOpen: false
+    // Menu de VPNs aberto pelo botão de rede (segura o painel também)
+    property bool vpnMenuOpen: false
+    // Mouse em cima do menu de VPNs (segura o painel enquanto navega nele)
+    property bool vpnMenuHovered: false
     // Mixer de aplicativos aberto no lugar dos Levels (botão no CC)
     property bool mixerOpen: false
     property int tab: 0
@@ -52,6 +56,7 @@ Singleton {
             Webcam.open = false;
             RecentFiles.open = false;
             Music.panelOpen = false;
+            Midea.panelOpen = false;
         } else {
             mixerOpen = false;
         }
@@ -67,7 +72,7 @@ Singleton {
         target: "controlcenter"
 
         function toggle(): void { root.toggle(); }
-        function open(): void { Webcam.open = false; RecentFiles.open = false; Notifications.centerOpen = false; Music.panelOpen = false; root.open = true; }
+        function open(): void { Webcam.open = false; RecentFiles.open = false; Notifications.centerOpen = false; Music.panelOpen = false; Midea.panelOpen = false; root.open = true; }
         function close(): void { root.close(); }
         function setTab(n: int): void { root.tab = n; }
         function getTab(): int { return root.tab; }
