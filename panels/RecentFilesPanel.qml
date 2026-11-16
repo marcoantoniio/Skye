@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Wayland
 import QtQuick
 import qs.services
+import qs.widgets
 
 PanelWindow {
     id: panel
@@ -36,138 +37,18 @@ PanelWindow {
     exclusionMode: ExclusionMode.Ignore
     aboveWindows: true
     mask: Region { item: frame }
-    // ---- geometria da moldura (animada) ----
-    // Abertura: cresce de 0 até a altura final (saindo da ilha).
-    // Troca: a moldura "morfa" do tamanho do painel antigo até o tamanho
-    // deste — a janela se transforma, sem fade nem piscar.
-    readonly property bool wanted: RecentFiles.open && !ControlCenter.open && !Notifications.centerOpen
-    property bool shown: false
-    readonly property real fullW: panel.panelWidth
-    readonly property real fullH: Theme.recentPanelHeight
-    property real frameW: fullW
-    property real frameH: 0
-
     // Sempre mapeada (pré-mapeada) — a moldura em 0 é que a esconde
     visible: true
 
-    NumberAnimation {
-        id: morphW
-
-        target: panel
-        property: "frameW"
-        duration: 400
-        easing.type: Easing.OutCubic
+    MorphPanel {
+        id: morph
+        wanted: RecentFiles.open && !ControlCenter.open && !Notifications.centerOpen
+        fullW: panel.panelWidth
+        fullH: Theme.recentPanelHeight
     }
 
-    NumberAnimation {
-        id: morphH
-
-        target: panel
-        property: "frameH"
-        duration: 400
-        easing.type: Easing.OutCubic
-    }
-
-    // Troca: o painel que entra incrementa a sequência e define o alvo do
-    // morph; quem está saindo acompanha NA MESMA hora (sem atraso de frame —
-    // senão a janela antiga deixa um "rasto" aparecendo em volta da nova).
-    property bool switchMorph: false
-
-    Connections {
-        target: Island
-
-        function onSwitchSeqChanged() {
-            if (!panel.shown || panel.wanted)
-                return;
-            // Troca: este painel sai NA HORA — o que entra já nasce no mesmo
-            // tamanho e se transforma. Nunca há duas janelas juntas.
-            panel.switchMorph = true;
-            Island.panelsShown -= 1;
-            panel.shown = false;
-        }
-    }
-
-    function openNow() {
-        if (!shown) {
-            const switching = Island.panelsShown > 0;
-            Island.panelsShown += 1;
-            panel.switchMorph = false;
-            morphW.stop();
-            morphH.stop();
-            if (switching) {
-                // Troca: nasce no tamanho do painel antigo e morfa até o seu
-                panel.frameW = Island.lastPanelWidth > 0 ? Island.lastPanelWidth : panel.fullW;
-                panel.frameH = Island.lastPanelHeight > 0 ? Island.lastPanelHeight : panel.fullH;
-                Island.switchTargetWidth = panel.fullW;
-                Island.switchTargetHeight = panel.fullH;
-                // Avisa quem está saindo para acompanhar o morph agora
-                Island.switchSeq += 1;
-            } else {
-                // Abertura normal: cresce de 0 (saindo da ilha)
-                panel.frameW = panel.fullW;
-                panel.frameH = 0;
-            }
-            shown = true;
-            morphW.from = panel.frameW;
-            morphW.to = panel.fullW;
-            morphH.from = panel.frameH;
-            morphH.to = panel.fullH;
-            morphW.start();
-            morphH.start();
-        } else {
-            // Reabriu durante a saída: volta ao tamanho final
-            morphW.stop();
-            morphH.stop();
-            morphW.from = panel.frameW;
-            morphW.to = panel.fullW;
-            morphH.from = panel.frameH;
-            morphH.to = panel.fullH;
-            morphW.start();
-            morphH.start();
-        }
-    }
-
-    // A janela é criada sob demanda (Bar.qml): ao nascer já com wanted=true,
-    // precisa abrir na hora.
-    Component.onCompleted: if (wanted) openNow()
-
-    onWantedChanged: {
-        if (wanted) {
-            openNow();
-        } else if (shown) {
-            // Guarda o tamanho atual para a próxima troca começar daqui
-            Island.lastPanelWidth = panel.frameW;
-            Island.lastPanelHeight = panel.frameH;
-            Qt.callLater(function() {
-                if (panel.wanted || !panel.shown)
-                    return;
-                if (panel.switchMorph) {
-                    // A troca já disparou o morph + o hide (Connections)
-                    panel.switchMorph = false;
-                } else {
-                    // Fechou: recolhe para a ilha
-                    morphW.stop();
-                    morphH.stop();
-                    morphH.from = panel.frameH;
-                    morphH.to = 0;
-                    morphH.start();
-                    hideDelay.restart();
-                }
-            });
-        }
-    }
-
-    Timer {
-        id: hideDelay
-
-        interval: 440
-        onTriggered: {
-            if (!panel.wanted && panel.shown) {
-                Island.panelsShown -= 1;
-                panel.shown = false;
-            }
-        }
-    }
+    // Bar.qml consulta/zera o estado ao descarregar a janela sob demanda.
+    property alias shown: morph.shown
 
     // Ícone por tipo de arquivo (glifos conferidos na Nerd Font)
     function iconFor(name) {
@@ -205,7 +86,7 @@ PanelWindow {
 
         // Tamanho animado: cresce na abertura e "morfa" na troca de painel
         width: Island.pillWidth
-        height: panel.shown ? panel.frameH : 0
+        height: morph.shown ? morph.frameH : 0
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
         clip: true
@@ -249,7 +130,7 @@ PanelWindow {
                 topMargin: 12
                 leftMargin: 14
             }
-            opacity: panel.frameH < 120 ? 0 : 1
+            opacity: morph.frameH < 120 ? 0 : 1
             text: I18n.tr("recent")
             color: Theme.foregroundDim
             font.family: Theme.fontFamily
@@ -265,7 +146,7 @@ PanelWindow {
                 topMargin: 8
                 rightMargin: 14
             }
-            opacity: panel.frameH < 120 ? 0 : 1
+            opacity: morph.frameH < 120 ? 0 : 1
             text: "✕"
             color: closeArea.containsMouse ? Theme.foreground : Theme.foregroundDim
             font.family: Theme.fontFamily
@@ -294,7 +175,7 @@ PanelWindow {
                 rightMargin: 12
                 bottomMargin: 12
             }
-            opacity: panel.frameH < 120 ? 0 : 1
+            opacity: morph.frameH < 120 ? 0 : 1
             clip: true
             spacing: 2
             model: RecentFiles.files

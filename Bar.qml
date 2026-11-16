@@ -241,17 +241,22 @@ PanelWindow {
             }
         }
 
-        // Item central: volume (OSD) > gravação > timer > clipboard > música > relógio
+        // Item central: volume (OSD) > gravação > timer > clipboard > OpenCode
+        // (trabalhando ou aviso de conclusão) > música > relógio
         readonly property string centerMode: Audio.osdVisible ? "volume"
             : Recorder.recording ? "rec"
             : TimerService.messageVisible ? "timer"
             : Clipboard.feedbackVisible ? "clipboard"
+            : OpenCode.runningNow ? "opencode"
+            : OpenCode.finishVisible ? "opencodeDone"
             : ((Music.playing || (Music.panelOpen && Music.active)) ? "music" : "clock")
 
         readonly property real centerWidth: centerMode === "volume" ? volumeOsd.implicitWidth
             : centerMode === "rec" ? recIndicator.implicitWidth
             : centerMode === "timer" ? timerNotice.implicitWidth
             : centerMode === "clipboard" ? clipNotice.implicitWidth
+            : centerMode === "opencode" ? openCodeStatus.implicitWidth
+            : centerMode === "opencodeDone" ? openCodeFinish.implicitWidth
             : centerMode === "music" ? nowPlaying.implicitWidth
             : clockItem.implicitWidth
 
@@ -417,6 +422,18 @@ PanelWindow {
             visible: pill.centerMode === "clipboard"
         }
 
+        OpenCodeStatus {
+            id: openCodeStatus
+            anchors.centerIn: parent
+            visible: pill.centerMode === "opencode"
+        }
+
+        OpenCodeFinish {
+            id: openCodeFinish
+            anchors.centerIn: parent
+            visible: pill.centerMode === "opencodeDone"
+        }
+
         // ---- direita: botões de categoria ----
         Item {
             id: rightWrap
@@ -455,6 +472,8 @@ PanelWindow {
 
                 AcButton {
                     id: acButton
+
+                    visible: Settings.feature("midea")
 
                     onActivated: {
                         if (Midea.panelOpen) {

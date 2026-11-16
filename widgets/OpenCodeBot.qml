@@ -10,6 +10,7 @@ Item {
     implicitHeight: 20
 
     property bool blinking: false
+    property color tint: Theme.accent
 
     // pisca a cada ~3s (fecha rápido e reabre)
     Timer {
@@ -44,7 +45,7 @@ Item {
         width: 3.5
         height: 3.5
         radius: 1.75
-        color: Theme.accentAlt
+        color: root.tint
     }
 
     // cabeça (telinha)
@@ -70,7 +71,7 @@ Item {
             width: 3
             height: root.blinking ? 0.8 : 3.6
             radius: 1.5
-            color: Theme.accent
+            color: root.tint
 
             Behavior on height {
                 NumberAnimation { duration: 70 }
@@ -83,7 +84,7 @@ Item {
             width: 3
             height: leftEye.height
             radius: 1.5
-            color: Theme.accent
+            color: root.tint
         }
 
         // boca

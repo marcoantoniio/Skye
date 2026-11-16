@@ -53,141 +53,32 @@ PanelWindow {
     // Abertura: cresce de 0 até a altura final (saindo da ilha).
     // Troca: a moldura "morfa" do tamanho do painel antigo até o tamanho
     // deste — a janela se transforma, sem fade nem piscar.
-    readonly property bool wanted: Notifications.centerOpen
-    property bool shown: false
-    readonly property real fullW: center.panelWidth
-    readonly property real fullH: frozenHeight > 0 ? frozenHeight
-        : Math.min(Theme.panelMorphHeight, frame.implicitHeight)
-    property real frameW: fullW
-    property real frameH: 0
-
     // Sempre mapeada (pré-mapeada) — a moldura em 0 é que a esconde
     visible: true
 
-    NumberAnimation {
-        id: morphW
-
-        target: center
-        property: "frameW"
-        duration: 400
-        easing.type: Easing.OutCubic
+    MorphPanel {
+        id: morph
+        wanted: Notifications.centerOpen
+        fullW: center.panelWidth
+        fullH: center.frozenHeight > 0 ? center.frozenHeight
+            : Math.min(Theme.panelMorphHeight, frame.implicitHeight)
     }
 
-    NumberAnimation {
-        id: morphH
-
-        target: center
-        property: "frameH"
-        duration: 400
-        easing.type: Easing.OutCubic
-    }
-
-    // Troca: o painel que entra incrementa a sequência e define o alvo do
-    // morph; quem está saindo acompanha NA MESMA hora (sem atraso de frame —
-    // senão a janela antiga deixa um "rasto" aparecendo em volta da nova).
-    property bool switchMorph: false
+    // Bar.qml consulta/zera o estado ao descarregar a janela sob demanda.
+    property alias shown: morph.shown
 
     Connections {
-        target: Island
+        target: morph
 
-        function onSwitchSeqChanged() {
-            if (!center.shown || center.wanted)
-                return;
-            // Troca: este painel sai NA HORA — o que entra já nasce no mesmo
-            // tamanho e se transforma. Nunca há duas janelas juntas.
-            center.switchMorph = true;
-            Island.panelsShown -= 1;
-            center.shown = false;
-        }
-    }
-
-    function openNow() {
-        if (!shown) {
-            const switching = Island.panelsShown > 0;
-            Island.panelsShown += 1;
-            center.switchMorph = false;
-            morphW.stop();
-            morphH.stop();
-            if (switching) {
-                // Troca: nasce no tamanho do painel antigo e morfa até o seu
-                center.frameW = Island.lastPanelWidth > 0 ? Island.lastPanelWidth : center.fullW;
-                center.frameH = Island.lastPanelHeight > 0 ? Island.lastPanelHeight : center.fullH;
-                Island.switchTargetWidth = center.fullW;
-                Island.switchTargetHeight = center.fullH;
-                // Avisa quem está saindo para acompanhar o morph agora
-                Island.switchSeq += 1;
-            } else {
-                // Abertura normal: cresce de 0 (saindo da ilha)
-                center.frameW = center.fullW;
-                center.frameH = 0;
+        function onShownChanged() {
+            // congela a altura do conteúdo atual (sem mudar a altura enquanto aberto)
+            if (morph.shown) {
+                center.frozenHeight = 0;
+                Qt.callLater(() => {
+                    center.frozenHeight = Math.min(540, frame.implicitHeight);
+                    morph.remorphH();
+                });
             }
-            shown = true;
-            morphW.from = center.frameW;
-            morphW.to = center.fullW;
-            morphH.from = center.frameH;
-            morphH.to = center.fullH;
-            morphW.start();
-            morphH.start();
-        } else {
-            // Reabriu durante a saída: volta ao tamanho final
-            morphW.stop();
-            morphH.stop();
-            morphW.from = center.frameW;
-            morphW.to = center.fullW;
-            morphH.from = center.frameH;
-            morphH.to = center.fullH;
-            morphW.start();
-            morphH.start();
-        }
-    }
-
-    // A janela é criada sob demanda (Bar.qml): ao nascer já com wanted=true,
-    // precisa abrir na hora.
-    Component.onCompleted: if (wanted) openNow()
-
-    onWantedChanged: {
-        if (wanted) {
-            openNow();
-        } else if (shown) {
-            // Guarda o tamanho atual para a próxima troca começar daqui
-            Island.lastPanelWidth = center.frameW;
-            Island.lastPanelHeight = center.frameH;
-            Qt.callLater(function() {
-                if (center.wanted || !center.shown)
-                    return;
-                if (center.switchMorph) {
-                    // A troca já disparou o morph + o hide (Connections)
-                    center.switchMorph = false;
-                } else {
-                    // Fechou: recolhe para a ilha
-                    morphW.stop();
-                    morphH.stop();
-                    morphH.from = center.frameH;
-                    morphH.to = 0;
-                    morphH.start();
-                    hideDelay.restart();
-                }
-            });
-        }
-    }
-
-    Timer {
-        id: hideDelay
-
-        interval: 440
-        onTriggered: {
-            if (!center.wanted && center.shown) {
-                Island.panelsShown -= 1;
-                center.shown = false;
-            }
-        }
-    }
-
-    onShownChanged: {
-        // congela a altura do conteúdo atual (sem mudar a altura enquanto aberto)
-        if (shown) {
-            frozenHeight = 0;
-            Qt.callLater(() => frozenHeight = Math.min(540, frame.implicitHeight));
         }
     }
 
@@ -196,7 +87,7 @@ PanelWindow {
 
         // Tamanho animado: cresce na abertura e "morfa" na troca de painel
         width: Island.pillWidth
-        height: center.shown ? center.frameH : 0
+        height: morph.shown ? morph.frameH : 0
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
         implicitHeight: column.implicitHeight + 24
@@ -241,10 +132,10 @@ PanelWindow {
                 horizontalCenter: parent.horizontalCenter
                 topMargin: 12
             }
-            width: center.fullW - 24
-            height: center.fullH - 24
+            width: morph.fullW - 24
+            height: morph.fullH - 24
             // Some antes da moldura virar um resto fino (sem sobra na ilha)
-            opacity: center.frameH < 120 ? 0 : 1
+            opacity: morph.frameH < 120 ? 0 : 1
 
             Behavior on opacity {
                 NumberAnimation { duration: 120; easing.type: Easing.OutCubic }

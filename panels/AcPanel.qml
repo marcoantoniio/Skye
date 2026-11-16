@@ -9,6 +9,7 @@ import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 import qs.services
+import qs.widgets
 
 PanelWindow {
     id: panel
@@ -41,116 +42,14 @@ PanelWindow {
     aboveWindows: true
     mask: Region { item: frame }
 
-    // ---- geometria da moldura (animada) ----
-    readonly property bool wanted: Midea.panelOpen && !ControlCenter.open && !Notifications.centerOpen
-    property bool shown: false
-    readonly property real fullW: panel.panelWidth
-    readonly property real fullH: Theme.acPanelHeight
-    property real frameW: fullW
-    property real frameH: 0
-
     // Sempre mapeada (pré-mapeada) — a moldura em 0 é que a esconde
     visible: true
 
-    NumberAnimation {
-        id: morphW
-
-        target: panel
-        property: "frameW"
-        duration: 400
-        easing.type: Easing.OutCubic
-    }
-
-    NumberAnimation {
-        id: morphH
-
-        target: panel
-        property: "frameH"
-        duration: 400
-        easing.type: Easing.OutCubic
-    }
-
-    property bool switchMorph: false
-
-    Connections {
-        target: Island
-
-        function onSwitchSeqChanged() {
-            if (!panel.shown || panel.wanted)
-                return;
-            // Troca: este painel sai NA HORA — o que entra já nasce no mesmo
-            // tamanho e se transforma. Nunca há duas janelas juntas.
-            panel.switchMorph = true;
-            Island.panelsShown -= 1;
-            panel.shown = false;
-        }
-    }
-
-    onWantedChanged: {
-        if (wanted) {
-            if (!shown) {
-                const switching = Island.panelsShown > 0;
-                Island.panelsShown += 1;
-                panel.switchMorph = false;
-                morphW.stop();
-                morphH.stop();
-                if (switching) {
-                    panel.frameW = Island.lastPanelWidth > 0 ? Island.lastPanelWidth : panel.fullW;
-                    panel.frameH = Island.lastPanelHeight > 0 ? Island.lastPanelHeight : panel.fullH;
-                    Island.switchTargetWidth = panel.fullW;
-                    Island.switchTargetHeight = panel.fullH;
-                    Island.switchSeq += 1;
-                } else {
-                    panel.frameW = panel.fullW;
-                    panel.frameH = 0;
-                }
-                shown = true;
-                morphW.from = panel.frameW;
-                morphW.to = panel.fullW;
-                morphH.from = panel.frameH;
-                morphH.to = panel.fullH;
-                morphW.start();
-                morphH.start();
-            } else {
-                morphW.stop();
-                morphH.stop();
-                morphW.from = panel.frameW;
-                morphW.to = panel.fullW;
-                morphH.from = panel.frameH;
-                morphH.to = panel.fullH;
-                morphW.start();
-                morphH.start();
-            }
-        } else if (shown) {
-            Island.lastPanelWidth = panel.frameW;
-            Island.lastPanelHeight = panel.frameH;
-            Qt.callLater(function() {
-                if (panel.wanted || !panel.shown)
-                    return;
-                if (panel.switchMorph) {
-                    panel.switchMorph = false;
-                } else {
-                    morphW.stop();
-                    morphH.stop();
-                    morphH.from = panel.frameH;
-                    morphH.to = 0;
-                    morphH.start();
-                    hideDelay.restart();
-                }
-            });
-        }
-    }
-
-    Timer {
-        id: hideDelay
-
-        interval: 440
-        onTriggered: {
-            if (!panel.wanted && panel.shown) {
-                Island.panelsShown -= 1;
-                panel.shown = false;
-            }
-        }
+    MorphPanel {
+        id: morph
+        wanted: Midea.panelOpen && !ControlCenter.open && !Notifications.centerOpen
+        fullW: panel.panelWidth
+        fullH: Theme.acPanelHeight
     }
 
     // Chip (modo/vento/swing/toggle): preenchido quando selecionado.
@@ -252,7 +151,7 @@ PanelWindow {
         id: frame
 
         width: Island.pillWidth
-        height: panel.shown ? panel.frameH : 0
+        height: morph.shown ? morph.frameH : 0
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
         clip: true
@@ -293,7 +192,7 @@ PanelWindow {
                 margins: 16
             }
             spacing: 10
-            opacity: panel.frameH < 120 ? 0 : 1
+            opacity: morph.frameH < 120 ? 0 : 1
 
             // ---- cabeçalho: unidade + título + estado + power ----
             RowLayout {

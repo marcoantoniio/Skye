@@ -24,19 +24,9 @@ PanelWindow {
     property var panelWindow: null
     property var anchorItem: null
 
-    property string cpuText: "—"
-    property real cpuProgress: -1
-    property string memText: "—"
-    property real memProgress: -1
-    property string gpuText: "—"
-    property string gpuLabel: "GPU"
-    property real gpuProgress: -1
     // URL do globo no rodapé: padrão startpage; para apontar para outro alvo
     // (ex.: um SearXNG local) coloque a URL em ~/.config/skye/globe_url.txt
     property string globeUrl: "https://www.startpage.com/"
-    property string tempText: "—"
-    property var disks: []
-    property string uptimeText: "—"
 
     // Menu de dispositivos de áudio (setinha das linhas de nível)
     property bool deviceMenuOpen: false
@@ -56,22 +46,19 @@ PanelWindow {
     // Métricas para o card "Sistema" (3ª coluna do Dashboard)
     readonly property var sysMetrics: {
         const out = [];
-        out.push({ label: "CPU", value: panel.cpuText, progress: panel.cpuProgress });
-        out.push({ label: "RAM", value: panel.memText, progress: panel.memProgress });
-        out.push({ label: "GPU", value: panel.gpuText, progress: panel.gpuProgress });
-        const t = parseFloat(panel.tempText);
-        out.push({ label: "Temp", value: panel.tempText, progress: isFinite(t) ? t / 100 : -1 });
-        for (let i = 0; i < panel.disks.length; ++i) {
-            const d = panel.disks[i];
+        out.push({ label: "CPU", value: SystemInfo.cpuText, progress: SystemInfo.cpuProgress });
+        out.push({ label: "RAM", value: SystemInfo.memText, progress: SystemInfo.memProgress });
+        out.push({ label: "GPU", value: SystemInfo.gpuText, progress: SystemInfo.gpuProgress });
+        const t = parseFloat(SystemInfo.tempText);
+        out.push({ label: "Temp", value: SystemInfo.tempText, progress: isFinite(t) ? t / 100 : -1 });
+        for (let i = 0; i < SystemInfo.disks.length; ++i) {
+            const d = SystemInfo.disks[i];
             if (d.label === "/")
                 out.push({ label: "root", value: d.percent, progress: d.progress });
         }
-        out.push({ label: "Uptime", value: panel.uptimeText, progress: -1 });
+        out.push({ label: "Uptime", value: SystemInfo.uptimeText, progress: -1 });
         return out;
     }
-
-    property real prevCpuTotal: -1
-    property real prevCpuIdle: -1
 
     // Nomes amigáveis dos discos — ajuste para os seus pontos de montagem
     function diskName(mount) {
@@ -82,91 +69,6 @@ PanelWindow {
         if (mount === "/mnt/hd")
             return "HD";
         return mount;
-    }
-
-    function parseSys(out) {
-        const lines = out.split("\n").filter(l => l.trim().length > 0);
-        const data = ({});
-
-        for (let i = 0; i < lines.length; ++i) {
-            const sp = lines[i].indexOf(" ");
-            if (sp > 0)
-                data[lines[i].slice(0, sp)] = lines[i].slice(sp + 1);
-        }
-
-        // CPU (delta entre amostras de /proc/stat)
-        if (data.cpu !== undefined) {
-            const f = data.cpu.trim().split(/\s+/).slice(1).map(Number);
-            const total = f.reduce((a, b) => a + b, 0);
-            const idle = (f[3] || 0) + (f[4] || 0);
-            if (prevCpuTotal > 0 && total > prevCpuTotal) {
-                const dt = total - prevCpuTotal;
-                const di = idle - prevCpuIdle;
-                const busy = Math.max(0, Math.min(1, 1 - di / dt));
-                cpuText = Math.round(busy * 100) + "%";
-                cpuProgress = busy;
-            }
-            prevCpuTotal = total;
-            prevCpuIdle = idle;
-        }
-
-        // Memória
-        if (data.mem !== undefined) {
-            const f = data.mem.trim().split(/\s+/);
-            const total = Number(f[1]);
-            const used = Number(f[2]);
-            if (total > 0) {
-                memText = Math.round(used / total * 100) + "%";
-                memProgress = used / total;
-            }
-        }
-
-        // GPU (NVIDIA via nvidia-smi, AMD/amdgpu via sysfs ou Intel via
-        // intel_gpu_top: utilização, VRAM usada, VRAM total em MiB)
-        if (data.gpu !== undefined && /^\d/.test(data.gpu.trim())) {
-            const f = data.gpu.split(",").map(s => Number(s.trim()));
-            if (f.length >= 3 && isFinite(f[0])) {
-                gpuText = Math.round(f[0]) + "%";
-                gpuProgress = f[0] / 100;
-                gpuLabel = (f[1] > 0 && f[2] > 0)
-                    ? "GPU · " + (f[1] / 1024).toFixed(1) + "/" + (f[2] / 1024).toFixed(0) + " GB"
-                    : "GPU";
-            }
-        }
-
-        // Temperatura da CPU
-        if (data.temp !== undefined) {
-            const m = data.temp.match(/\+([0-9.]+)°C/);
-            if (m)
-                tempText = Math.round(Number(m[1])) + "°C";
-        }
-
-        // Discos (3 maiores filesystems reais)
-        if (data.disks !== undefined) {
-            const entries = data.disks.split("|").filter(s => s.trim().length > 0);
-            const out = [];
-            for (let i = 0; i < entries.length; ++i) {
-                const f = entries[i].trim().split(/\s+/);
-                if (f.length >= 3) {
-                    const size = Number(f[1]);
-                    const used = Number(f[2]);
-                    if (size > 0)
-                        out.push({ label: f[0], percent: Math.round(used / size * 100) + "%", progress: used / size });
-                }
-            }
-            disks = out;
-        }
-
-        // Uptime
-        if (data.uptime !== undefined) {
-            const secs = Number(data.uptime.trim().split(/\s+/)[0]);
-            if (isFinite(secs)) {
-                const d = Math.floor(secs / 86400);
-                const h = Math.floor((secs % 86400) / 3600);
-                const m = Math.floor((secs % 3600) / 60);
-                uptimeText = (d > 0 ? d + "d " : "") + h + "h " + m + "min";
-            }
-        }
     }
 
     readonly property int panelWidth: Theme.controlCenterPanelWidth
@@ -201,130 +103,23 @@ PanelWindow {
     // Abertura: cresce de 0 até a altura final (saindo da ilha).
     // Troca: a moldura "morfa" do tamanho do painel antigo até o tamanho
     // deste — a janela se transforma, sem fade nem piscar.
-    readonly property bool wanted: ControlCenter.open
-    property bool shown: false
-    readonly property real fullW: panel.panelWidth
-    readonly property real fullH: Theme.controlCenterPanelHeight
-    property real frameW: fullW
-    property real frameH: 0
-
     // Sempre mapeada (pré-mapeada) — a moldura em 0 é que a esconde
     visible: true
 
-    NumberAnimation {
-        id: morphW
-
-        target: panel
-        property: "frameW"
-        duration: 400
-        easing.type: Easing.OutCubic
+    MorphPanel {
+        id: morph
+        wanted: ControlCenter.open
+        fullW: panel.panelWidth
+        fullH: Theme.controlCenterPanelHeight
     }
-
-    NumberAnimation {
-        id: morphH
-
-        target: panel
-        property: "frameH"
-        duration: 400
-        easing.type: Easing.OutCubic
-    }
-
-    // Troca: o painel que entra incrementa a sequência e define o alvo do
-    // morph; quem está saindo acompanha NA MESMA hora (sem atraso de frame —
-    // senão a janela antiga deixa um "rasto" aparecendo em volta da nova).
-    property bool switchMorph: false
 
     Connections {
-        target: Island
+        target: morph
 
-        function onSwitchSeqChanged() {
-            if (!panel.shown || panel.wanted)
-                return;
-            // Troca: este painel sai NA HORA — o que entra já nasce no mesmo
-            // tamanho e se transforma. Nunca há duas janelas juntas.
-            panel.switchMorph = true;
-            Island.panelsShown -= 1;
-            panel.shown = false;
+        function onShownChanged() {
+            if (morph.shown)
+                Brightness.refresh();
         }
-    }
-
-    onWantedChanged: {
-        if (wanted) {
-            if (!shown) {
-                const switching = Island.panelsShown > 0;
-                Island.panelsShown += 1;
-                panel.switchMorph = false;
-                morphW.stop();
-                morphH.stop();
-                if (switching) {
-                    // Troca: nasce no tamanho do painel antigo e morfa até o seu
-                    panel.frameW = Island.lastPanelWidth > 0 ? Island.lastPanelWidth : panel.fullW;
-                    panel.frameH = Island.lastPanelHeight > 0 ? Island.lastPanelHeight : panel.fullH;
-                    Island.switchTargetWidth = panel.fullW;
-                    Island.switchTargetHeight = panel.fullH;
-                    // Avisa quem está saindo para acompanhar o morph agora
-                    Island.switchSeq += 1;
-                } else {
-                    // Abertura normal: cresce de 0 (saindo da ilha)
-                    panel.frameW = panel.fullW;
-                    panel.frameH = 0;
-                }
-                shown = true;
-                morphW.from = panel.frameW;
-                morphW.to = panel.fullW;
-                morphH.from = panel.frameH;
-                morphH.to = panel.fullH;
-                morphW.start();
-                morphH.start();
-            } else {
-                // Reabriu durante a saída: volta ao tamanho final
-                morphW.stop();
-                morphH.stop();
-                morphW.from = panel.frameW;
-                morphW.to = panel.fullW;
-                morphH.from = panel.frameH;
-                morphH.to = panel.fullH;
-                morphW.start();
-                morphH.start();
-            }
-        } else if (shown) {
-            // Guarda o tamanho atual para a próxima troca começar daqui
-            Island.lastPanelWidth = panel.frameW;
-            Island.lastPanelHeight = panel.frameH;
-            Qt.callLater(function() {
-                if (panel.wanted || !panel.shown)
-                    return;
-                if (panel.switchMorph) {
-                    // A troca já disparou o morph + o hide (Connections)
-                    panel.switchMorph = false;
-                } else {
-                    // Fechou: recolhe para a ilha
-                    morphW.stop();
-                    morphH.stop();
-                    morphH.from = panel.frameH;
-                    morphH.to = 0;
-                    morphH.start();
-                    hideDelay.restart();
-                }
-            });
-        }
-    }
-
-    Timer {
-        id: hideDelay
-
-        interval: 440
-        onTriggered: {
-            if (!panel.wanted && panel.shown) {
-                Island.panelsShown -= 1;
-                panel.shown = false;
-            }
-        }
-    }
-
-    onShownChanged: {
-        if (shown)
-            Brightness.refresh();
     }
 
     // Vincula os nós de áudio para poder ler/escrever volume e mute
@@ -415,41 +210,6 @@ PanelWindow {
     }
 
     // ---- dashboard ----
-    Process {
-        id: sysProc
-
-        command: ["sh", "-c",
-            "echo \"cpu $(head -1 /proc/stat)\"; " +
-            "echo \"mem $(free -b | sed -n 2p)\"; " +
-            // GPU: NVIDIA via nvidia-smi; AMD (amdgpu) via sysfs; Intel via
-            // intel_gpu_top (intel-gpu-tools), se instalado
-            "g=$(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | head -1); " +
-            "if [ -z \"$g\" ]; then for d in /sys/class/drm/card*/device; do " +
-            "if [ -r \"$d/gpu_busy_percent\" ]; then " +
-            "u=$(cat \"$d/gpu_busy_percent\" 2>/dev/null); " +
-            "vu=$(cat \"$d/mem_info_vram_used\" 2>/dev/null); " +
-            "vt=$(cat \"$d/mem_info_vram_total\" 2>/dev/null); " +
-            "g=\"$u, $(( ${vu:-0} / 1048576 )), $(( ${vt:-0} / 1048576 ))\"; break; fi; done; fi; " +
-            "if [ -z \"$g\" ] && command -v intel_gpu_top >/dev/null 2>&1; then " +
-            "u=$(timeout 1.2 intel_gpu_top -J -s 400 2>/dev/null | tail -1 | grep -oE '\"Render/3D[^\"]*\": \\{\"busy\": [0-9.]+' | head -1 | grep -oE '[0-9.]+$'); " +
-            "if [ -n \"$u\" ]; then g=\"$u, 0, 0\"; fi; fi; " +
-            "echo \"gpu $g\"; " +
-            "echo \"temp $(sensors 2>/dev/null | grep -m1 -E 'Package id 0|Tctl|Tdie')\"; " +
-            "echo \"disks $(df -B1 -x tmpfs -x devtmpfs -x efivarfs -x overlay -x squashfs -x fuse.portal --output=source,target,size,used 2>/dev/null | tail -n +2 | awk '!seen[$1]++ { print $2, $3, $4 }' | sort -k2 -n -r | head -3 | paste -sd'|' -)\"; " +
-            "echo \"uptime $(cat /proc/uptime)\""
-        ]
-        stdout: StdioCollector {
-            onStreamFinished: panel.parseSys(text)
-        }
-    }
-
-    Timer {
-        interval: 1500
-        running: panel.visible && ControlCenter.tab === 1
-        repeat: true
-        onTriggered: sysProc.running = true
-    }
-
     // URL do globo (opcional): ~/.config/skye/globe_url.txt
     Process {
         id: globeUrlProc
@@ -491,11 +251,18 @@ PanelWindow {
         function onTabChanged() {
             if (ControlCenter.tab === 0)
                 Brightness.refresh();
-            if (ControlCenter.tab === 1)
-                sysProc.running = true;
             if (ControlCenter.tab === 2)
                 Clipboard.refresh();
+            panel.syncSystemActive();
         }
+
+        function onOpenChanged() {
+            panel.syncSystemActive();
+        }
+    }
+
+    function syncSystemActive() {
+        SystemInfo.active = ControlCenter.open && ControlCenter.tab === 1;
     }
 
     Timer {
@@ -506,7 +273,7 @@ PanelWindow {
     }
 
     Component.onCompleted: {
-        sysProc.running = true;
+        panel.syncSystemActive();
         Clipboard.refresh();
         panel.loadCurrentNote();
     }
@@ -516,7 +283,7 @@ PanelWindow {
 
         // Tamanho animado: cresce na abertura e "morfa" na troca de painel
         width: Island.pillWidth
-        height: panel.shown ? panel.frameH : 0
+        height: morph.shown ? morph.frameH : 0
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
         clip: true
@@ -560,10 +327,10 @@ PanelWindow {
                 horizontalCenter: parent.horizontalCenter
                 topMargin: 16
             }
-            width: panel.fullW - 32
-            height: panel.fullH - 32
+            width: morph.fullW - 32
+            height: morph.fullH - 32
             // Some antes da moldura virar um resto fino (sem sobra na ilha)
-            opacity: panel.frameH < 120 ? 0 : 1
+            opacity: morph.frameH < 120 ? 0 : 1
 
             Behavior on opacity {
                 NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
@@ -606,6 +373,12 @@ PanelWindow {
                         label: I18n.tr("tabOpenCode")
                         selected: ControlCenter.tab === 3
                         onActivated: ControlCenter.tab = 3
+                    }
+
+                    PanelTab {
+                        label: I18n.tr("tabSettings")
+                        selected: ControlCenter.tab === 4
+                        onActivated: ControlCenter.tab = 4
                     }
 
                     Item { Layout.fillWidth: true }
@@ -738,6 +511,7 @@ PanelWindow {
 
                         QuickToggle {
                             Layout.fillWidth: true
+                            visible: Settings.feature("recorder")
                             glyph: "\u{F0100}" // nf-md-video
                             label: I18n.tr("recorder")
                             active: Recorder.recording
@@ -746,6 +520,7 @@ PanelWindow {
 
                         QuickToggle {
                             Layout.fillWidth: true
+                            visible: Settings.feature("camera")
                             glyph: "\u{F05A0}" // nf-md-webcam
                             label: I18n.tr("camera")
                             active: Webcam.open
@@ -1717,6 +1492,13 @@ PanelWindow {
                 // ================= PAGE 3: OPENCODE =================
                 OpenCodeTab {
                     id: ocPage
+
+                    Layout.fillWidth: true
+                }
+
+                // ================= PAGE 4: SETTINGS =================
+                SettingsTab {
+                    id: settingsPage
 
                     Layout.fillWidth: true
                 }

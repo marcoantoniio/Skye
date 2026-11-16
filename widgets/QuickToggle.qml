@@ -68,9 +68,6 @@ Rectangle {
     HoverHandler {
         id: btnHover
 
-        onHoveredChanged: {
-            console.log("DBGQT hovered=", hovered); // TEMP
-            root.hovered = hovered;
-        }
+        onHoveredChanged: root.hovered = hovered
     }
 }

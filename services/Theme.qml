@@ -43,6 +43,11 @@ Singleton {
     readonly property int spacing: 8
     readonly property int radius: 14
 
+    // A mesma cor com outra transparência (fundos e bordas suaves)
+    function withAlpha(c, a) {
+        return Qt.rgba(c.r, c.g, c.b, a);
+    }
+
     // Fontes (instaladas no sistema)
     readonly property string fontFamily: "Roboto"
     readonly property string iconFont: "JetBrainsMono Nerd Font"

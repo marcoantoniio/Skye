@@ -1,7 +1,8 @@
-// Aba OpenCode do Control Center: prompt com streaming das respostas do
-// `opencode run`, numa sessão dedicada (OpenCode.qml). /cd <pasta> muda o
-// diretório e /model <nome> troca o modelo. Enter envia; ↑/↓ navegam o
-// histórico.
+// Aba de agentes do Control Center: prompt com streaming estruturado (API
+// local do OpenCode ou ACP do Copilot), em abas independentes (cada uma com
+// provedor, sessão, pasta e modelo próprios). Ctrl+T nova aba; Ctrl+W fecha;
+// Ctrl+Tab alterna. /cd <pasta> muda o diretório e /model <nome> troca o
+// modelo. Enter envia; ↑/↓ navegam o histórico da aba atual.
 
 import Quickshell
 import QtQuick
@@ -14,20 +15,23 @@ ColumnLayout {
 
     property real shiftX: 0
     property int histIdx: 0
+    property real clockNow: Date.now()
 
     transform: Translate { x: root.shiftX }
     spacing: 6
 
-    readonly property string shortDir: {
-        const home = Quickshell.env("HOME");
-        return OpenCode.workingDir.startsWith(home)
-            ? "~" + OpenCode.workingDir.slice(home.length)
-            : OpenCode.workingDir;
+    readonly property var tab: OpenCode.current
+
+    Timer {
+        interval: 1000
+        repeat: true
+        running: OpenCode.runningNow
+        onTriggered: root.clockNow = Date.now()
     }
 
     function submit() {
         const text = input.text.trim();
-        if (text === "" || OpenCode.running)
+        if (text === "" || root.tab === null || root.tab.running)
             return;
         input.text = "";
         root.histIdx = 0;
@@ -35,92 +39,541 @@ ColumnLayout {
     }
 
     function histUp() {
-        if (root.histIdx >= OpenCode.history.length)
+        if (root.tab === null)
+            return;
+        const history = root.tab.history;
+        if (root.histIdx >= history.length)
             return;
         root.histIdx++;
-        input.text = OpenCode.history[OpenCode.history.length - root.histIdx];
+        input.text = history[history.length - root.histIdx];
         input.cursorPosition = input.text.length;
     }
 
     function histDown() {
-        if (root.histIdx <= 0)
+        if (root.tab === null || root.histIdx <= 0)
             return;
         root.histIdx--;
-        input.text = root.histIdx === 0 ? "" : OpenCode.history[OpenCode.history.length - root.histIdx];
+        input.text = root.histIdx === 0 ? "" : root.tab.history[root.tab.history.length - root.histIdx];
         input.cursorPosition = input.text.length;
     }
 
-    // ---------- cabeçalho: pasta · modelo + parar + nova ----------
+    // Atalhos de terminal, ativos só quando a página do OpenCode está aberta.
+    Shortcut {
+        sequence: "Ctrl+T"
+        enabled: ControlCenter.open && ControlCenter.tab === 3
+        onActivated: OpenCode.newTab()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+W"
+        enabled: ControlCenter.open && ControlCenter.tab === 3
+        onActivated: OpenCode.closeTab(OpenCode.currentTab)
+    }
+
+    Shortcut {
+        sequence: "Ctrl+Tab"
+        enabled: ControlCenter.open && ControlCenter.tab === 3 && OpenCode.tabs.length > 1
+        onActivated: OpenCode.selectTab((OpenCode.currentTab + 1) % OpenCode.tabs.length)
+    }
+
+    Shortcut {
+        sequence: "Ctrl+Shift+Tab"
+        enabled: ControlCenter.open && ControlCenter.tab === 3 && OpenCode.tabs.length > 1
+        onActivated: OpenCode.selectTab((OpenCode.currentTab - 1 + OpenCode.tabs.length) % OpenCode.tabs.length)
+    }
+
+    Connections {
+        target: OpenCode
+
+        function onCurrentTabChanged() {
+            root.histIdx = 0;
+            Qt.callLater(() => output.positionViewAtEnd());
+        }
+    }
+
+    // ---------- abas ----------
     RowLayout {
         Layout.fillWidth: true
-        spacing: 10
+        spacing: 4
 
-        OpenCodeBot {
-            Layout.alignment: Qt.AlignVCenter
-        }
+        ListView {
+            id: tabStrip
 
-        Text {
             Layout.fillWidth: true
-            text: root.shortDir + (OpenCode.model !== "" ? " · " + OpenCode.model : "")
-            color: Theme.foregroundDim
-            font.family: Theme.fontFamily
-            font.pixelSize: 10
-            elide: Text.ElideLeft
-        }
+            Layout.preferredHeight: 24
+            implicitHeight: 24
+            orientation: ListView.Horizontal
+            spacing: 4
+            clip: true
+            model: OpenCode.tabs
+            currentIndex: OpenCode.currentTab
+            boundsBehavior: Flickable.StopAtBounds
+            interactive: contentWidth > width
 
-        Text {
-            visible: OpenCode.running
-            text: "● " + I18n.tr("ocWorking")
-            color: Theme.accent
-            font.family: Theme.fontFamily
-            font.pixelSize: 10
-        }
+            onCurrentIndexChanged: if (currentIndex >= 0) Qt.callLater(() => positionViewAtIndex(currentIndex, ListView.Contain))
+            onCountChanged: if (currentIndex >= 0) Qt.callLater(() => positionViewAtIndex(currentIndex, ListView.Contain))
 
-        Text {
-            visible: OpenCode.running
-            text: I18n.tr("ocStop")
-            color: stopArea.containsMouse ? Theme.foreground : Theme.foregroundDim
-            font.family: Theme.fontFamily
-            font.pixelSize: 10
+            WheelHandler {
+                onWheel: (wheel) => {
+                    tabStrip.contentX = Math.max(0, Math.min(
+                        tabStrip.contentWidth - tabStrip.width,
+                        tabStrip.contentX - wheel.angleDelta.y));
+                }
+            }
 
-            MouseArea {
-                id: stopArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: OpenCode.stop()
+            delegate: Rectangle {
+                id: tabItem
+
+                required property var modelData
+                required property int index
+
+                readonly property bool active: tabItem.index === OpenCode.currentTab
+
+                implicitWidth: Math.min(180, Math.max(78, tabRow.implicitWidth + 14))
+                implicitHeight: 24
+                radius: 7
+                color: tabItem.active
+                    ? Theme.withAlpha(Theme.accent, 0.13)
+                    : (tabHover.hovered ? Theme.surfaceHover : "transparent")
+                border.width: 1
+                border.color: tabItem.active
+                    ? Theme.withAlpha(Theme.accent, 0.38)
+                    : "transparent"
+
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: (mouse) => {
+                        if (mouse.button === Qt.MiddleButton)
+                            OpenCode.closeTab(tabItem.index);
+                        else
+                            OpenCode.selectTab(tabItem.index);
+                    }
+                }
+
+                HoverHandler {
+                    id: tabHover
+                }
+
+                Row {
+                    id: tabRow
+
+                    anchors.left: parent.left
+                    anchors.leftMargin: 7
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 5
+
+                    Rectangle {
+                        width: 6
+                        height: 6
+                        radius: 3
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: tabItem.modelData.running ? Theme.accent : Theme.foregroundDim
+                        opacity: tabItem.modelData.running ? 1 : 0.45
+                    }
+
+                    Text {
+                        id: tabName
+
+                        text: OpenCode.tabTitle(tabItem.modelData)
+                        width: Math.min(104, implicitWidth)
+                        elide: Text.ElideMiddle
+                        color: tabItem.active ? Theme.foreground : Theme.foregroundDim
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 10
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Text {
+                        visible: tabItem.modelData.running
+                        text: OpenCode.clock((root.clockNow - tabItem.modelData.startedAt) / 1000)
+                        color: Theme.accent
+                        font.family: Theme.iconFont
+                        font.pixelSize: 9
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Item {
+                        width: 14
+                        height: 14
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Text {
+                            id: tabClose
+
+                            anchors.centerIn: parent
+                            text: "✕"
+                            color: tabCloseArea.containsMouse ? Theme.urgent : Theme.foregroundDim
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 10
+                            opacity: tabItem.active || tabHover.hovered ? 1 : 0
+                        }
+
+                        MouseArea {
+                            id: tabCloseArea
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: OpenCode.closeTab(tabItem.index)
+                        }
+                    }
+                }
+
+                Rectangle {
+                    visible: tabItem.active
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                        bottom: parent.bottom
+                        leftMargin: 8
+                        rightMargin: 8
+                    }
+                    height: 2
+                    radius: 1
+                    color: Theme.accent
+                }
             }
         }
 
-        Text {
-            text: "\u{F00E2}" // md-broom (limpar o chat)
-            color: clearArea.containsMouse ? Theme.foreground : Theme.foregroundDim
-            font.family: Theme.iconFont
-            font.pixelSize: 13
-            Layout.alignment: Qt.AlignVCenter
+        Rectangle {
+            Layout.preferredWidth: 24
+            Layout.preferredHeight: 24
+            radius: 7
+            color: newTabArea.containsMouse ? Theme.surfaceHover : "transparent"
+            border.width: 1
+            border.color: newTabArea.containsMouse ? Theme.border : "transparent"
+
+            Text {
+                anchors.centerIn: parent
+                text: "\u{F0415}" // md-plus
+                color: newTabArea.containsMouse ? Theme.accent : Theme.foregroundDim
+                font.family: Theme.iconFont
+                font.pixelSize: 12
+            }
 
             MouseArea {
-                id: clearArea
+                id: newTabArea
+
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: OpenCode.clearLines()
+                onClicked: OpenCode.newTab()
             }
         }
 
-        Text {
-            text: "\u{F0415}" // md-plus (nova sessão)
-            color: newArea.containsMouse ? Theme.foreground : Theme.foregroundDim
-            font.family: Theme.iconFont
-            font.pixelSize: 13
-            Layout.alignment: Qt.AlignVCenter
+        Rectangle {
+            Layout.preferredWidth: 24
+            Layout.preferredHeight: 24
+            radius: 7
+            color: folderArea.containsMouse ? Theme.surfaceHover : "transparent"
+            border.width: 1
+            border.color: folderArea.containsMouse ? Theme.border : "transparent"
+
+            Text {
+                anchors.centerIn: parent
+                text: "\u{F024B}" // md-folder (abrir uma aba numa pasta)
+                color: folderArea.containsMouse ? Theme.accent : Theme.foregroundDim
+                font.family: Theme.iconFont
+                font.pixelSize: 12
+            }
 
             MouseArea {
-                id: newArea
+                id: folderArea
+
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: OpenCode.newSession()
+                onClicked: OpenCode.chooseFolder()
+            }
+        }
+
+        // Um clique abre uma aba nova no provedor escolhido.
+        Repeater {
+            model: Agents.providers
+
+            delegate: Rectangle {
+                required property var modelData
+
+                Layout.preferredWidth: providerLabel.implicitWidth + 14
+                Layout.preferredHeight: 24
+                radius: 7
+                color: providerArea.containsMouse
+                    ? Theme.withAlpha(modelData.tint, 0.16)
+                    : "transparent"
+                border.width: 1
+                border.color: providerArea.containsMouse ? Theme.border : "transparent"
+
+                Text {
+                    id: providerLabel
+
+                    anchors.centerIn: parent
+                    text: modelData.name
+                    color: providerArea.containsMouse ? Theme.accent : Theme.foregroundDim
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 9
+                    font.weight: Font.DemiBold
+                }
+
+                MouseArea {
+                    id: providerArea
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: OpenCode.newTab(modelData.id)
+                }
+            }
+        }
+    }
+
+    // ---------- cartão da sessão (linguagem do Vorssaint) ----------
+    Rectangle {
+        Layout.fillWidth: true
+        implicitHeight: sessionCard.implicitHeight + 18
+        radius: 10
+        color: Theme.card
+        border.width: 1
+        border.color: Theme.withAlpha(Theme.accent, 0.20)
+
+        ColumnLayout {
+            id: sessionCard
+
+            anchors {
+                left: parent.left
+                right: parent.right
+                top: parent.top
+                leftMargin: 9
+                rightMargin: 9
+                topMargin: 9
+            }
+            spacing: 4
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 6
+
+                OpenCodeMark {
+                    size: 16
+                    working: root.tab !== null && root.tab.running
+                    Layout.alignment: Qt.AlignVCenter
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: root.tab === null
+                        ? "Agent"
+                        : OpenCode.tabTitle(root.tab)
+                    color: Theme.foreground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 12
+                    font.weight: Font.DemiBold
+                    elide: Text.ElideRight
+                }
+
+                // "Agora" / "Parado", como o chip de estado do Vorssaint
+                Rectangle {
+                    implicitWidth: statusRow.implicitWidth + 10
+                    implicitHeight: 16
+                    radius: 8
+                    color: root.tab !== null && root.tab.running
+                        ? Theme.withAlpha(Theme.accent, 0.16)
+                        : Qt.rgba(1, 1, 1, 0.06)
+
+                    Row {
+                        id: statusRow
+
+                        anchors.centerIn: parent
+                        spacing: 4
+
+                        Rectangle {
+                            width: 4
+                            height: 4
+                            radius: 2
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: root.tab !== null && root.tab.running
+                                ? Theme.accent : Theme.foregroundDim
+                        }
+
+                        Text {
+                            text: root.tab !== null && root.tab.running
+                                ? I18n.tr("ocNow") : I18n.tr("ocIdle")
+                            color: root.tab !== null && root.tab.running
+                                ? Theme.accent : Theme.foregroundDim
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 9
+                            font.weight: Font.DemiBold
+                        }
+                    }
+                }
+
+                Text {
+                    visible: root.tab !== null && root.tab.running
+                    text: root.tab !== null
+                        ? OpenCode.clock((root.clockNow - root.tab.startedAt) / 1000) : ""
+                    color: Theme.accent
+                    font.family: Theme.iconFont
+                    font.pixelSize: 10
+                    font.weight: Font.Medium
+                }
+
+                Rectangle {
+                    visible: root.tab !== null && root.tab.running
+                    implicitWidth: stopLabel.implicitWidth + 14
+                    implicitHeight: 16
+                    radius: 8
+                    color: Theme.withAlpha(Theme.accent, 0.16)
+
+                    Text {
+                        id: stopLabel
+
+                        anchors.centerIn: parent
+                        text: I18n.tr("ocStop")
+                        color: Theme.accent
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 9
+                        font.weight: Font.DemiBold
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: OpenCode.stop()
+                    }
+                }
+
+                Text {
+                    text: "\u{F00E2}" // md-broom (limpar o chat)
+                    color: clearArea.containsMouse ? Theme.foreground : Theme.foregroundDim
+                    font.family: Theme.iconFont
+                    font.pixelSize: 13
+                    Layout.alignment: Qt.AlignVCenter
+
+                    MouseArea {
+                        id: clearArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: OpenCode.clearLines()
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 5
+
+                Text {
+                    Layout.fillWidth: true
+                    text: {
+                        const project = root.tab !== null ? OpenCode.projectName(root.tab) : "";
+                        const model = root.tab !== null && OpenCode.modelFor(root.tab) !== ""
+                            ? OpenCode.modelFor(root.tab)
+                            : (root.tab !== null && root.tab.provider === "copilot"
+                                ? I18n.tr("copilotDefaultModel") : I18n.tr("ocDefaultModel"));
+                        const provider = root.tab !== null ? OpenCode.providerName(root.tab) : "OpenCode";
+                        return provider + " · " + project + " · " + model;
+                    }
+                    color: Theme.foregroundDim
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 9
+                    elide: Text.ElideRight
+                }
+
+                // Chips no estilo dos cartões do Vorssaint
+                Rectangle {
+                    implicitWidth: readoutChip.implicitWidth + 10
+                    implicitHeight: 16
+                    radius: 8
+                    color: readoutArea.containsMouse
+                        ? Theme.withAlpha(Theme.accent, 0.22)
+                        : Theme.withAlpha(Theme.accent, 0.14)
+
+                    Text {
+                        id: readoutChip
+
+                        anchors.centerIn: parent
+                        text: Agents.readoutLabel()
+                        color: Theme.accent
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 9
+                        font.weight: Font.DemiBold
+                    }
+
+                    MouseArea {
+                        id: readoutArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Agents.cycleReadout()
+                    }
+                }
+
+                Rectangle {
+                    visible: root.tab !== null && OpenCode.tokensOf(root.tab) > 0
+                    implicitWidth: tokensChip.implicitWidth + 10
+                    implicitHeight: 16
+                    radius: 8
+                    color: Theme.withAlpha(Theme.accent, 0.14)
+
+                    Text {
+                        id: tokensChip
+
+                        anchors.centerIn: parent
+                        text: root.tab !== null
+                            ? OpenCode.formatTokens(OpenCode.tokensOf(root.tab)) + " "
+                              + I18n.tr("ocTokens") : ""
+                        color: Theme.accent
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 9
+                        font.weight: Font.DemiBold
+                    }
+                }
+
+                Rectangle {
+                    visible: root.tab !== null && OpenCode.tokensOf(root.tab) > 0
+                    implicitWidth: costChip.implicitWidth + 10
+                    implicitHeight: 16
+                    radius: 8
+                    color: Qt.rgba(1, 1, 1, 0.06)
+
+                    Text {
+                        id: costChip
+
+                        anchors.centerIn: parent
+                        text: root.tab !== null
+                            ? "API " + OpenCode.formatCost(OpenCode.costOf(root.tab)) : ""
+                        color: Theme.foregroundDim
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 9
+                        font.weight: Font.DemiBold
+                    }
+                }
+
+                Rectangle {
+                    visible: root.tab !== null && OpenCode.cacheOf(root.tab) > 0
+                    implicitWidth: cacheChip.implicitWidth + 10
+                    implicitHeight: 16
+                    radius: 8
+                    color: Theme.withAlpha(Theme.accent, 0.14)
+
+                    Text {
+                        id: cacheChip
+
+                        anchors.centerIn: parent
+                        text: root.tab !== null
+                            ? Math.round(OpenCode.cacheOf(root.tab) * 100) + "% "
+                              + I18n.tr("ocCache") : ""
+                        color: Theme.accent
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 9
+                        font.weight: Font.DemiBold
+                    }
+                }
             }
         }
     }
@@ -219,7 +672,8 @@ ColumnLayout {
 
                         anchors.centerIn: parent
                         width: parent.width - 20
-                        text: modelData.text
+                        text: Markdown.toHtml(modelData.text)
+                        textFormat: Text.RichText
                         color: Theme.foreground
                         font.family: Theme.iconFont
                         font.pixelSize: 11
@@ -237,7 +691,8 @@ ColumnLayout {
                     width: parent.width - (line.isTool ? 10 : 0)
                     text: modelData.text === "" ? " " : modelData.text
                     color: modelData.kind === "err" ? Theme.urgent
-                         : Theme.foregroundDim
+                         : (modelData.kind === "tool" && modelData.status === "failed")
+                             ? Theme.urgent : Theme.foregroundDim
                     font.family: Theme.iconFont
                     font.pixelSize: modelData.kind === "info" ? 9 : 11
                     horizontalAlignment: modelData.kind === "info" ? Text.AlignHCenter : Text.AlignLeft
@@ -312,16 +767,27 @@ ColumnLayout {
             }
         }
 
-        Text {
+        Column {
             anchors.centerIn: parent
             width: parent.width - 60
-            visible: OpenCode.lines.length === 0
-            horizontalAlignment: Text.AlignHCenter
-            text: I18n.tr("ocHint")
-            color: Theme.foregroundDim
-            font.family: Theme.fontFamily
-            font.pixelSize: 10
-            wrapMode: Text.Wrap
+            spacing: 8
+            visible: root.tab === null || OpenCode.lines.length === 0
+
+            OpenCodeBot {
+                anchors.horizontalCenter: parent.horizontalCenter
+                tint: Theme.accent
+                opacity: 0.9
+            }
+
+            Text {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                text: I18n.tr("ocHint")
+                color: Theme.foregroundDim
+                font.family: Theme.fontFamily
+                font.pixelSize: 10
+                wrapMode: Text.Wrap
+            }
         }
     }
 

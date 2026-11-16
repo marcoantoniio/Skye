@@ -110,11 +110,13 @@ but it works on any compositor with `wlr-layer-shell` — KWin, Hyprland, niri, 
 | `network-manager-applet` | network icon in the tray (`nm-applet --indicator`, start it with the session) |
 | `qt6-multimedia` | camera preview (Camera button) |
 | `curl` | lyrics (lrclib) and album art |
-| `gpu-screen-recorder` | all-screens recording (Recorder button; uses NVENC/GPU and system audio + microphone) |
+| `gpu-screen-recorder`, `python3` | screen recording (Recorder button; uses NVENC/GPU and system audio + microphone) |
 | `khal`, `vdirsyncer` | Proton Calendar events on the Dashboard |
 | `python3` (with `venv`), `msmart-ng` | Midea air conditioner panel (local control). See Integrations |
 | `discord` (native, not Flatpak/Snap), `python3` | Discord Rich Presence for the Deezer track |
-| `opencode` | OpenCode tab in the Control Center (prompts with streaming responses) |
+| `opencode`, `python3` | OpenCode provider in the Control Center (local API/SSE bridge, streaming responses) |
+| `copilot`, `python3` | Copilot provider in the Control Center (ACP bridge; optional) |
+| `zenity` or `kdialog` | Agents tab: folder picker for starting a tab in a specific directory (optional) |
 
 ---
 
@@ -390,14 +392,61 @@ public API), the title, the album art (with an animated equalizer badge), a
 progress bar and a "Listen on Deezer" button (buttons are only visible to
 other people). Pausing clears the presence.
 
-### OpenCode tab
+### Agents tab (OpenCode and Copilot)
 
-Prompts OpenCode from the bar, streaming the answer line by line. Requires
-the `opencode` CLI.
+Prompts coding agents from the bar, streaming structured events (text
+deltas, tool calls, tokens, cost, title and completion). Two providers are
+connected: **OpenCode** (local API/SSE bridge; starts
+`opencode serve --service` when needed) and **Copilot** (persistent
+`copilot --acp` bridge, auto-approving permissions like the old `--auto`
+mode). Both bridges use only the Python standard library. The Copilot ACP
+does not expose tokens or cost, so those stay at zero for its sessions.
 
-The tab keeps a session of its own (persisted across restarts), an input
-line with history (↑/↓), a **broom** button (wipes the visible chat) and a
-**plus** button (fresh session). The commands:
+The tab works like a terminal with **multiple tabs**. Each tab has its own
+session, working directory and model, and keeps generating in the background
+when another tab is focused. Tabs are named after the **chat title OpenCode
+gives the session** (or the project folder before the first title). The
+**plus** button (or `Ctrl+T`) creates a tab, the **✕** on each tab (or
+`Ctrl+W`) closes it, and `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle through them.
+The **folder** button next to `+` opens a native picker and starts a new tab
+in the chosen directory (like opening a terminal in that folder); it needs
+`zenity` or `kdialog`. The input line keeps a history per tab (↑/↓) and the
+**broom** button wipes the visible chat.
+
+Skye sessions deny the Code Mode **browser** tools: the server is headless,
+so the desktop browser is never connected. This keeps the model from
+trying `browser.*` calls and dumping “browser disconnected” errors into the
+chat.
+
+The provider buttons next to the folder picker open a new tab in
+**OpenCode** or **Copilot**. Each tab keeps its provider when restored.
+Answers are rendered as Markdown: **bold**, *italic*, `inline code`, lists,
+code blocks, headings, horizontal rules and tables (including `---`
+separator rows). The session card follows the Vorssaint AI-agents look:
+agent mark, chat title, **Now/Idle** state, elapsed timer, model, tokens
+written, API value and cache share. The bridge subscribes to the local API
+event stream, so the numbers update as the agent works; prompts and replies
+stay in memory and are never written by Skye.
+
+The small chip in the session card cycles the island readout between
+**time**, **tokens** and **API value**. Tasks longer than 10 seconds also
+show a short “finished in …” notice in the island. Preferences live in
+`~/.config/skye/settings.json` (the old `agents.json` is imported once) and
+can be changed by IPC:
+
+```bash
+qs -c skye ipc call agent setReadout tokens
+qs -c skye ipc call agent setFinishMin 30
+qs -c skye ipc call settings setFinishNotice false
+qs -c skye ipc call settings setFeature camera false
+```
+
+The **Settings** tab in the Control Center edits the same values (readout,
+finish notice/minimum time, modules and agent usage for today/7 days).
+
+While an answer is being generated, the island hides the clock and shows a
+**theme-accent terminal icon + the chosen readout**; clicking it opens the
+running tab. The commands:
 
 - `cd <dir>` (or `/cd <dir>`) — where the agent works (default: your home
   directory). It starts a fresh session there, because OpenCode sessions
@@ -406,9 +455,12 @@ line with history (↑/↓), a **broom** button (wipes the visible chat) and a
 - `/model <name>` — pick a model (empty resets to OpenCode's default);
 - `/new` — start a fresh session (same as the plus button).
 
-It runs with `--auto`, so the agent may read and edit files and run
-commands without asking for approval — keep that in mind when pointing it
-at a directory with important files.
+Copilot tabs keep their provider, directory and last model across restarts,
+but the ACP conversation itself is recreated on the next prompt (Copilot
+does not expose token/cost data through ACP).
+
+The agent may read and edit files and run commands — keep that in mind when
+pointing it at a directory with important files.
 
 ---
 
@@ -426,15 +478,24 @@ qs -c skye ipc call workspaces switchToIndex 1
 qs -c skye ipc call brightness set 40        # brightness (DDC/CI)
 qs -c skye ipc call weather refresh
 qs -c skye ipc call clipboard copy "text"
-qs -c skye ipc call recorder start           # records all screens (/mnt/hd/videos)
+qs -c skye ipc call recorder start           # records the main screen (/mnt/hd/videos)
 qs -c skye ipc call recorder pause           # pauses/resumes recording
 qs -c skye ipc call recorder stop            # stops and saves the file
 qs -c skye ipc call music status             # current music (MPRIS)
 qs -c skye ipc call music toggle             # play/pause
 qs -c skye ipc call discord status           # Discord Rich Presence state
-qs -c skye ipc call opencode send "prompt"   # OpenCode tab: prompt (streams the answer)
-qs -c skye ipc call opencode clear           # clears the OpenCode tab chat
-qs -c skye ipc call opencode status          # OpenCode tab state
+qs -c skye ipc call opencode send "prompt"   # agents tab: prompt (streams the answer)
+qs -c skye ipc call opencode newTab          # opens a new tab in the current provider
+qs -c skye ipc call opencode newTabAt /path  # new tab already in that directory
+qs -c skye ipc call opencode chooseFolder    # opens the native folder picker
+qs -c skye ipc call opencode selectTab 1     # switches to tab 2 (zero-based)
+qs -c skye ipc call opencode closeTab 1      # closes tab 2 (zero-based)
+qs -c skye ipc call opencode clear           # clears the current agent chat
+qs -c skye ipc call opencode status          # agents tab state
+qs -c skye ipc call opencode newTabProvider copilot  # new Copilot tab
+qs -c skye ipc call settings getFeature camera       # module state
+qs -c skye ipc call agent setReadout tokens  # island readout: elapsed|tokens|cost
+qs -c skye ipc call agent setFinishMin 30    # finish notice after 30s (0 = all)
 qs -c skye ipc call audio setVolume 0.5      # output volume (shows the OSD)
 qs -c skye ipc call timer pomodoro           # pomodoro/stopwatch (no UI yet)
 qs -c skye ipc call timer status             # pomodoro/stopwatch state
@@ -476,6 +537,7 @@ qs -c skye ipc call midea selfclean          # start self-clean
 | Camera panel screen | `services/Theme.qml` → `cameraScreenName` |
 | Dynamic island monitor | `services/Theme.qml` → `barScreenName` |
 | Discord Application ID (Rich Presence) | `~/.config/skye/discord_client_id.txt` |
+| Island readout, finish notice and module toggles | `~/.config/skye/settings.json` |
 | Globe URL (footer button; default: startpage) | `~/.config/skye/globe_url.txt` |
 | Midea air conditioner credentials | `~/.config/skye/midea.json` |
 | Proton Calendar sharing link | `~/.config/vdirsyncer/config` |
@@ -495,7 +557,8 @@ skye/
 ├── panels/       # Control Center pages and popup panels
 ├── cards/        # Dashboard cards
 ├── widgets/      # small UI pieces used by the bar and panels
-├── scripts/      # Python bridges (Discord RPC and Midea)
+├── scripts/      # Python bridges (Discord RPC, Midea, OpenCode, Copilot and Recorder)
+├── tests/        # bridge unit tests (Python unittest)
 └── assets/       # images used by the UI
 ```
 
@@ -504,15 +567,30 @@ skye/
 | `shell.qml` | entry point; creates one bar per monitor |
 | `Bar.qml` | the dynamic island (collapses/expands on hover) |
 | `install.sh` | installer: dependencies, configuration, service and optional Midea venv |
-| `services/` | singletons: `Theme.qml`, `I18n.qml`, notifications, workspaces, music/audio, weather, Proton Calendar, Midea, VPN, clipboard, notes, recorder, timers, webcam, OpenCode and Discord |
+| `services/` | singletons: `Theme.qml`, `I18n.qml`, `Settings.qml`, `Agents.qml`/`AgentSettings.qml`, `SystemInfo.qml`, notifications, workspaces, music/audio, weather, Proton Calendar, Midea, VPN, clipboard, notes, recorder, timers, webcam, OpenCode and Discord |
 | `panels/` | `ControlCenterPanel.qml`, `MusicPanel.qml`, `CameraPanel.qml`, `RecentFilesPanel.qml`, `AcPanel.qml`, `NotificationCenter.qml`, `VpnMenu.qml`, `DeviceMenu.qml`, `NoteEditor.qml`, `OpenCodeTab.qml` |
 | `cards/` | `CalendarCard.qml`, `WeatherCard.qml`, `SystemCard.qml` |
-| `widgets/` | island and panel pieces: clock, bell, category buttons, tabs, sliders, toggles, tray, OSDs, weather buddy and the AC/calendar helpers |
-| `scripts/` | `discord_rpc.py` (Discord Rich Presence) and `midea_rpc.py` (Midea AC bridge) |
+| `widgets/` | island and panel pieces: clock, bell, category buttons, tabs, sliders, toggles, tray, OSDs, weather buddy, the AC/calendar helpers and `MorphPanel.qml` (shared panel morph) |
+| `scripts/` | `discord_rpc.py`, `midea_rpc.py`, `opencode_bridge.py` (API/SSE), `copilot_bridge.py` (ACP), `recorder_bridge.py` (gpu-screen-recorder IPC), `check.sh` (local checks) |
+| `tests/` | pure-function tests for the bridges |
 | `assets/` | images used by the UI |
 
 Files in subdirectories are imported with Quickshell module imports, for
 example `import qs.services`, `import qs.panels` and `import qs.widgets`.
+
+---
+
+## Development
+
+```bash
+scripts/check.sh    # py_compile + unit tests + qmllint (when installed)
+```
+
+The recorder IPC runs in `scripts/recorder_bridge.py` because Quickshell 0.3.2
+crashes on the `QLocalSocket` peer-close error when the recorder exits.
+
+The GitHub Actions workflow runs the Python tests and byte-compiles the
+bridges. QML linting is local because it needs the Quickshell modules.
 
 ---
 

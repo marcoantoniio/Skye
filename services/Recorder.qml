@@ -4,8 +4,10 @@ pragma Singleton
 //
 // - start(): grava só a tela principal (Theme.recorderScreenName, DP-1) em
 //   /mnt/hd/videos.
-// - stop(): finaliza o arquivo; pause()/resume() pausam de verdade
-//   (comandos nativos via socket IPC do gpu-screen-recorder).
+// - stop(): finaliza o arquivo; pause()/resume() pausam de verdade (comandos
+//   nativos via socket IPC do gpu-screen-recorder).
+// - O socket IPC fica no scripts/recorder_bridge.py: o Quickshell 0.3.2
+//   crasha no QLocalSocket quando o gravador fecha o socket (PeerClosedError).
 // - Enquanto grava, a ilha mostra o indicador REC (RecordingIndicator).
 // - Controle por IPC:
 //   qs -c skye ipc call recorder toggle|start|stop|pause|resume|isRecording|isPaused|getTime|getFile
@@ -22,11 +24,11 @@ Singleton {
     property int elapsed: 0
     property string lastFile: ""
 
-    readonly property string bin: "gpu-screen-recorder"
     readonly property string videosDir: "/mnt/hd/videos"
     readonly property string socketPath: Quickshell.env("XDG_RUNTIME_DIR") + "/skye-recorder.sock"
 
-    property int _nextId: 1
+    property bool _bridgeReady: false
+    property var _pendingStart: null
 
     function filePath(): string {
         const d = new Date();
@@ -36,17 +38,57 @@ Singleton {
         return root.videosDir + "/recording_" + stamp + ".mp4";
     }
 
-    // Envia um comando para o socket IPC do gravador. Retorna false se não
-    // estiver conectado (aí o chamador usa sinais como fallback).
-    function send(name, data) {
-        if (!ipc.connected)
+    function _send(message) {
+        if (!bridge.running)
             return false;
-
-        const message = { id: root._nextId++, name: name };
-        if (data !== undefined)
-            message.data = data;
-        ipc.write(JSON.stringify(message) + "\n");
+        bridge.write(JSON.stringify(message) + "\n");
         return true;
+    }
+
+    function _flushStart() {
+        if (root._pendingStart === null || !root._bridgeReady)
+            return;
+        const message = root._pendingStart;
+        root._pendingStart = null;
+        root._send(message);
+    }
+
+    function _onBridge(raw) {
+        let event = null;
+        try {
+            event = JSON.parse(raw);
+        } catch (e) {
+            return;
+        }
+        if (event === null || typeof event !== "object")
+            return;
+
+        if (event.kind === "ready") {
+            root._bridgeReady = true;
+            root._flushStart();
+        } else if (event.kind === "started") {
+            root.recording = true;
+            root.paused = false;
+        } else if (event.kind === "paused") {
+            root.paused = event.paused === true;
+        } else if (event.kind === "stopped") {
+            root.recording = false;
+            root.paused = false;
+            root._pendingStart = null;
+            killTimer.stop();
+        } else if (event.kind === "error") {
+            console.warn("[skye] gravador: " + (event.message || "erro"));
+            root.recording = false;
+            root.paused = false;
+            killTimer.stop();
+        }
+    }
+
+    function _abort() {
+        root._pendingStart = null;
+        root.recording = false;
+        root.paused = false;
+        killTimer.stop();
     }
 
     function start(): void {
@@ -56,30 +98,27 @@ Singleton {
         root.lastFile = root.filePath();
         root.elapsed = 0;
         root.paused = false;
-
-        proc.command = [
-            root.bin,
-            "-w", Theme.recorderScreenName, // só a tela principal (DP-1)
-            "-c", "mp4",            // container
-            "-k", "h264",           // codec compatível (NVENC)
-            "-f", "60",             // 60 fps
-            "-a", "default_output|default_input", // áudio do sistema + microfone
-            "-ac", "aac",           // áudio compatível com mp4
-            "-ipc", root.socketPath,
-            "-o", root.lastFile
-        ];
-        proc.running = true;
         root.recording = true;
+        root._pendingStart = {
+            cmd: "start",
+            screen: Theme.recorderScreenName,
+            file: root.lastFile,
+            socket: root.socketPath
+        };
+
+        if (bridge.running && root._bridgeReady)
+            root._flushStart();
+        else
+            bridge.running = true;
     }
 
     function stop(): void {
         if (!root.recording)
             return;
 
-        if (!root.send("stop")) {
-            if (root.paused)
-                proc.signal(18); // SIGCONT (fallback quando pausado por sinal)
-            proc.signal(2); // SIGINT: finaliza o arquivo
+        if (!root._bridgeReady || !root._send({ cmd: "stop" })) {
+            root._abort();
+            return;
         }
         killTimer.start();
     }
@@ -88,8 +127,10 @@ Singleton {
         if (!root.recording || root.paused)
             return;
 
-        if (!root.send("set-paused", true))
-            proc.signal(19); // SIGSTOP (fallback)
+        if (!root._send({ cmd: "pause", paused: true })) {
+            root._abort();
+            return;
+        }
         root.paused = true;
     }
 
@@ -97,8 +138,10 @@ Singleton {
         if (!root.recording || !root.paused)
             return;
 
-        if (!root.send("set-paused", false))
-            proc.signal(18); // SIGCONT (fallback)
+        if (!root._send({ cmd: "pause", paused: false })) {
+            root._abort();
+            return;
+        }
         root.paused = false;
     }
 
@@ -117,52 +160,45 @@ Singleton {
     }
 
     Process {
-        id: proc
+        id: bridge
 
-        onExited: {
-            ipc.connected = false;
-            root.recording = false;
-            root.paused = false;
+        command: ["python3", Quickshell.shellDir + "/scripts/recorder_bridge.py"]
+        stdinEnabled: true
+        running: false
+
+        stdout: SplitParser {
+            onRead: (line) => root._onBridge(line)
+        }
+
+        stderr: SplitParser {
+            onRead: (line) => console.warn("[skye] gravador: " + line)
+        }
+
+        onExited: (code) => {
+            root._bridgeReady = false;
+            root._pendingStart = null;
             killTimer.stop();
-        }
-    }
-
-    Socket {
-        id: ipc
-
-        path: root.socketPath
-
-        parser: SplitParser {
-            onRead: (line) => {
-                try {
-                    const reply = JSON.parse(line);
-                    if (reply.result && reply.result !== "ok")
-                        console.warn("[skye] gravador:", reply.result);
-                } catch (e) {
-                    console.warn("[skye] gravador: resposta inválida:", line);
-                }
+            if (root.recording) {
+                root.recording = false;
+                root.paused = false;
             }
+            if (code !== 0)
+                console.warn("[skye] gravador: bridge saiu com código " + code);
         }
-
-        onError: ipc.connected = false
     }
 
-    // O socket só existe depois que o gravador inicia: tenta conectar.
-    Timer {
-        interval: 500
-        repeat: true
-        running: root.recording && !ipc.connected
-        onTriggered: if (!ipc.connected) ipc.connected = true
-    }
-
-    // Se o stop não encerrar em 4s, força o término (SIGTERM).
+    // Se o stop não encerrar em 6s, força o término da ponte (que encerra o
+    // gpu-screen-recorder no finally).
     Timer {
         id: killTimer
-        interval: 4000
+        interval: 6000
 
         onTriggered: {
-            if (proc.running)
-                proc.running = false;
+            if (root.recording) {
+                root.recording = false;
+                root.paused = false;
+                bridge.running = false;
+            }
         }
     }
 

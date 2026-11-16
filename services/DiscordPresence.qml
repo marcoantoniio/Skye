@@ -22,6 +22,17 @@ Singleton {
     property string clientId: ""
     readonly property string idFile: Quickshell.env("HOME") + "/.config/skye/discord_client_id.txt"
     property var lastKey: null
+    readonly property bool enabled: Settings.feature("discord")
+
+    onEnabledChanged: {
+        if (!root.enabled) {
+            root.lastKey = null;
+            rpc.running = false;
+        } else if (root.clientId !== "") {
+            rpc.running = true;
+            debounce.restart();
+        }
+    }
 
     Process {
         id: loadProc
@@ -35,7 +46,8 @@ Singleton {
                 if (/^\d+$/.test(v)) {
                     root.clientId = v;
                     rpc.command = ["python3", Quickshell.shellDir + "/scripts/discord_rpc.py", v];
-                    rpc.running = true;
+                    if (root.enabled)
+                        rpc.running = true;
                 } else {
                     console.warn("[skye] discord: sem Application ID em " + root.idFile + "; Rich Presence desligado");
                 }
@@ -49,6 +61,8 @@ Singleton {
         ? String(Music.player.metadata["xesam:url"] || "") : ""
 
     function refresh() {
+        if (!root.enabled)
+            return;
         const key = root.deezerPlaying ? [Music.title, Music.artist, Music.album, Music.artUrl, root.trackUrl].join("\n") : "";
         if (key === root.lastKey)
             return;
